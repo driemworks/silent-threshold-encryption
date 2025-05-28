@@ -67,6 +67,14 @@ impl<E: Pairing> SystemPublicKeys<E> {
         lag_polys: &LagPolys<E::ScalarField>,
         k: usize,
     ) -> Self {
+        debug_assert!(
+            crs.n > k, "{}",
+            format!(
+                "CRS size (n = {}) must be greater than the number of sampled positions (k = {}) \
+                to ensure unique participant openings and prevent index collisions.",
+                crs.n, k
+            ));
+
         // using a deterministic seed for reproducibility across machines
         // can derandomize using a random oracle
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
@@ -99,7 +107,7 @@ impl<E: Pairing> SystemPublicKeys<E> {
 
         use rayon::prelude::*;
 
-        let timer = start_timer!(|| "Setup System Public Keys");
+        // let timer = start_timer!(|| "Setup System Public Keys");
         let mut lag_pks = vec![vec![]; m];
         lag_pks
             .par_iter_mut()
@@ -111,7 +119,7 @@ impl<E: Pairing> SystemPublicKeys<E> {
                 }
                 *lag_pk_i = lag_pk_inner;
             });
-        end_timer!(timer);
+        // end_timer!(timer);
 
         Self { m, k, pks, lag_pks }
     }

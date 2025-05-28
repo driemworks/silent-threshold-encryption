@@ -1,6 +1,7 @@
 use crate::crs::CRS;
 use crate::encryption::Ciphertext;
 use crate::utils::{lagrange_poly, open_all_values};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_ec::{pairing::Pairing, AffineRepr, PrimeGroup, VariableBaseMSM};
 use ark_ff::FftField;
 use ark_poly::{
@@ -13,7 +14,7 @@ use ark_std::{rand::RngCore, UniformRand, Zero};
 use crate::utils::{ark_de, ark_se};
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone)]
+#[derive(Clone, CanonicalDeserialize, CanonicalSerialize)]
 pub struct LagPolys<F: FftField> {
     pub l: Vec<DensePolynomial<F>>,
     pub l_minus0: Vec<DensePolynomial<F>>,
@@ -45,6 +46,7 @@ impl<F: FftField> LagPolys<F> {
         // compute polynomial (L_i(X) - L_i(0))/X
         let mut l_x = vec![DensePolynomial::zero(); n];
         for i in 0..n {
+            // if n < 2 => this panics
             l_x[i] = DensePolynomial::from_coefficients_vec(l_minus0[i].coeffs[2..].to_vec());
         }
 
@@ -94,7 +96,7 @@ pub struct SecretKey<E: Pairing> {
     sk: E::ScalarField,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, CanonicalDeserialize, CanonicalSerialize)]
 pub struct PartialDecryption<E: Pairing> {
     /// Party id
     pub id: usize,
