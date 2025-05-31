@@ -68,7 +68,7 @@ impl<E: Pairing> CRS<E> {
 
 		let tau2_inv: <E as Pairing>::ScalarField = (tau * tau).inverse().unwrap();
 		for i in 0..n {
-			let li = lagrange_poly(n, i);
+			let li = lagrange_poly(n, i).unwrap();
 			li_evals[i] = li.evaluate(&tau);
 
 			li_evals_minus0[i] = (li_evals[i] - li.coeffs[0]) * tau;

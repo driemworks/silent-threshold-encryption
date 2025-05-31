@@ -1,12 +1,12 @@
+use crate::error::Error;
 use ark_ec::pairing::Pairing;
 use ark_ff::{FftField, Field};
 use ark_poly::{
 	univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, Evaluations, Polynomial,
 	Radix2EvaluationDomain,
 };
-use ark_std::Zero;
-
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
+use ark_std::Zero;
 
 pub(crate) fn ark_se<S, A: CanonicalSerialize>(a: &A, s: S) -> Result<S::Ok, S::Error>
 where
@@ -28,7 +28,7 @@ where
 }
 
 // 1 at omega^i and 0 elsewhere on domain {omega^i}_{i \in [n]}
-pub fn lagrange_poly<F: FftField>(n: usize, i: usize) -> DensePolynomial<F> {
+pub fn lagrange_poly<F: FftField>(n: usize, i: usize) -> Result<DensePolynomial<F>, Error> {
 	debug_assert!(i < n);
 	//todo: check n is a power of 2
 	let mut evals = vec![];
@@ -38,10 +38,10 @@ pub fn lagrange_poly<F: FftField>(n: usize, i: usize) -> DensePolynomial<F> {
 	}
 
 	//powers of nth root of unity
-	let domain = Radix2EvaluationDomain::<F>::new(n).unwrap();
+	let domain = Radix2EvaluationDomain::<F>::new(n).ok_or(Error::DomainConstructionError)?;
 	let eval_form = Evaluations::from_vec_and_domain(evals, domain);
 	//interpolated polynomial over the n points
-	eval_form.interpolate()
+	Ok(eval_form.interpolate())
 }
 
 /// interpolates a polynomial which is zero on points and 1 at the point 0
@@ -70,33 +70,35 @@ pub fn open_all_values<E: Pairing>(
 	y: &Vec<E::G1Affine>,
 	f: &Vec<E::ScalarField>,
 	domain: &Radix2EvaluationDomain<E::ScalarField>,
-) -> Vec<E::G1> {
-	let top_domain = Radix2EvaluationDomain::<E::ScalarField>::new(2 * domain.size()).unwrap();
+) -> Result<Vec<E::G1>, Error> {
+	let size = domain.size();
+	let top_domain = Radix2EvaluationDomain::<E::ScalarField>::new(2 * size)
+		.ok_or(Error::DomainConstructionError)?;
 
 	// use FK22 to get all the KZG proofs in O(nlog n) time =======================
 	// f = {f0 ,f1, ..., fd}
 	// v = {(d 0s), f1, ..., fd}
-	let mut v = vec![E::ScalarField::zero(); domain.size() + 1];
+	let mut v = vec![E::ScalarField::zero(); size + 1];
 	v.append(&mut f[1..f.len()].to_vec());
 
-	debug_assert_eq!(v.len(), 2 * domain.size());
+	debug_assert_eq!(v.len(), 2 * size);
 	let v = top_domain.fft(&v);
 
 	// h = y \odot v
-	let mut h = vec![E::G1::zero(); 2 * domain.size()];
-	for i in 0..2 * domain.size() {
-		h[i] = y[i] * (v[i]);
+	let mut h = vec![E::G1::zero(); 2 * size];
+	for i in 0..2 * size {
+		h[i] = y[i] * v[i];
 	}
 
 	// inverse fft on h
 	let mut h = top_domain.ifft(&h);
 
-	h.truncate(domain.size());
+	h.truncate(size);
 
 	// fft on h to get KZG proofs
 	let pi = domain.fft(&h);
 
-	pi
+	Ok(pi)
 }
 
 /// interpolates a polynomial where evaluations on points are zero and the polynomial evaluates to 1
@@ -148,7 +150,7 @@ mod tests {
 	type E = Bls12_381;
 
 	#[test]
-	fn open_all_test() {
+	fn open_all_test_with_valid_domain() {
 		let mut rng = ark_std::test_rng();
 
 		let n = 1 << 8;
@@ -164,7 +166,7 @@ mod tests {
 		let com = G1::msm(&crs.powers_of_g[0..f.len()], &f).unwrap();
 
 		let timer = std::time::Instant::now();
-		let pi = open_all_values::<E>(&crs.y, &f, &domain);
+		let pi = open_all_values::<E>(&crs.y, &f, &domain).unwrap();
 		println!("open_all_values took {:?}", timer.elapsed());
 
 		// verify the kzg proof
@@ -177,5 +179,19 @@ mod tests {
 			let rhs = E::pairing(pi[i], crs.powers_of_h[1] - (h * domain.element(i)));
 			assert_eq!(lhs, rhs);
 		}
+	}
+
+	#[test]
+	fn open_all_test_with_invalid_domain() {
+		let rng = ark_std::test_rng();
+		let n = u32::MAX;
+		let domain = Radix2EvaluationDomain::<Fr>::new(n as usize).unwrap();
+		let crs = CRS::<E>::new(1, &mut ark_std::test_rng());
+		let f: Vec<ark_ff::Fp<ark_ff::MontBackend<ark_bls12_381::FrConfig, 4>, 4>> =
+			vec![Fr::zero(); 1];
+
+		let res = open_all_values::<E>(&crs.y, &f, &domain);
+		assert!(res.is_err());
+		assert_eq!(res, Err(Error::DomainConstructionError));
 	}
 }

@@ -32,7 +32,7 @@ impl<F: FftField> LagPolys<F> {
 		// compute polynomial L_i(X)
 		let mut l = vec![DensePolynomial::zero(); n];
 		for i in 0..n {
-			l[i] = lagrange_poly(n, i);
+			l[i] = lagrange_poly(n, i).unwrap();
 		}
 
 		// compute polynomial (L_i(X) - L_i(0))*X
@@ -245,7 +245,7 @@ impl<E: Pairing> PublicKey<E> {
 		// crs is {g^sk, g^{sk * tau}, g^{sk * tau^2}, ...}
 		// todo: move to https://eprint.iacr.org/2024/1279.pdf
 		let domain = Radix2EvaluationDomain::<E::ScalarField>::new(crs.n).unwrap();
-		let mut sk_li_lj_z = open_all_values::<E>(&self.y, &lag_polys.l[position].coeffs, &domain);
+		let mut sk_li_lj_z = open_all_values::<E>(&self.y, &lag_polys.l[position].coeffs, &domain).unwrap();
 		for j in 0..crs.n {
 			sk_li_lj_z[j] *= domain.element(j) * lag_polys.denom;
 		}
