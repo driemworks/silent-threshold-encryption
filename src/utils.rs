@@ -67,8 +67,8 @@ pub fn interp_mostly_zero<F: Field>(points: &Vec<F>) -> DensePolynomial<F> {
 /// See https://github.com/khovratovich/Kate/blob/master/Kate_amortized.pdf
 /// eprint version has a bug and hasn't been updated
 pub fn open_all_values<E: Pairing>(
-	y: &Vec<E::G1Affine>,
-	f: &Vec<E::ScalarField>,
+	y: &[E::G1Affine],
+	f: &[E::ScalarField],
 	domain: &Radix2EvaluationDomain<E::ScalarField>,
 ) -> Result<Vec<E::G1>, Error> {
 	let size = domain.size();
