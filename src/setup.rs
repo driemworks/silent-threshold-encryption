@@ -1,5 +1,6 @@
 use crate::{
 	crs::CRS,
+	error::Error,
 	types::Ciphertext,
 	utils::{lagrange_poly, open_all_values},
 };
@@ -26,8 +27,8 @@ pub struct LagPolys<F: FftField> {
 
 impl<F: FftField> LagPolys<F> {
 	// domain is the roots of unity of size n
-	pub fn new(n: usize) -> Self {
-		let domain = Radix2EvaluationDomain::<F>::new(n).unwrap();
+	pub fn new(n: usize) -> Result<Self, Error> {
+		let domain = Radix2EvaluationDomain::<F>::new(n).ok_or(Error::DomainConstructionError)?;
 
 		// compute polynomial L_i(X)
 		let mut l = vec![DensePolynomial::zero(); n];
@@ -80,18 +81,20 @@ impl<F: FftField> LagPolys<F> {
 		//     }
 		// }
 
-		Self { l, l_minus0, l_x, li_lj_z, denom: denom.inverse().unwrap() }
+		Ok(Self { l, l_minus0, l_x, li_lj_z, denom: denom.inverse().unwrap() })
 	}
 }
 
 #[derive(CanonicalSerialize, CanonicalDeserialize, Serialize, Deserialize, Clone)]
 pub struct SecretKey<E: Pairing> {
-    pub id: usize,
-    #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
-    sk: E::ScalarField,
+	pub id: usize,
+	#[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
+	sk: E::ScalarField,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, CanonicalDeserialize, CanonicalSerialize)]
+#[derive(
+	Clone, Debug, PartialEq, Serialize, Deserialize, CanonicalDeserialize, CanonicalSerialize,
+)]
 pub struct PartialDecryption<E: Pairing> {
 	/// Party id
 	pub id: usize,
@@ -109,30 +112,30 @@ impl<E: Pairing> PartialDecryption<E> {
 /// Position oblivious public key -- slower to aggregate
 #[derive(CanonicalSerialize, CanonicalDeserialize, Serialize, Deserialize, Clone)]
 pub struct PublicKey<E: Pairing> {
-    #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
-    pub bls_pk: E::G1, //BLS pk
-    #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
-    pub hints: Vec<E::G1Affine>, //hints
-    #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
-    pub y: Vec<E::G1Affine>, // preprocessed toeplitz matrix. only for efficiency and can be computed from hints
-    pub id: usize, // canonically assigned unique id in the system
+	#[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
+	pub bls_pk: E::G1, //BLS pk
+	#[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
+	pub hints: Vec<E::G1Affine>, //hints
+	#[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
+	pub y: Vec<E::G1Affine>, // preprocessed toeplitz matrix. only for efficiency and can be computed from hints
+	pub id: usize, // canonically assigned unique id in the system
 }
 
 /// Public key that can only be used in a fixed position -- faster to aggregate
 #[derive(CanonicalSerialize, CanonicalDeserialize, Serialize, Deserialize, Clone)]
 pub struct LagPublicKey<E: Pairing> {
-    pub id: usize,       //id of the party
-    pub position: usize, //position in the aggregate key
-    #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
-    pub bls_pk: E::G1, //BLS pk
-    #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
-    pub sk_li: E::G1, //hint
-    #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
-    pub sk_li_minus0: E::G1, //hint
-    #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
-    pub sk_li_lj_z: Vec<E::G1>, //hint
-    #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
-    pub sk_li_x: E::G1, //hint
+	pub id: usize,       //id of the party
+	pub position: usize, //position in the aggregate key
+	#[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
+	pub bls_pk: E::G1, //BLS pk
+	#[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
+	pub sk_li: E::G1, //hint
+	#[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
+	pub sk_li_minus0: E::G1, //hint
+	#[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
+	pub sk_li_lj_z: Vec<E::G1>, //hint
+	#[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
+	pub sk_li_x: E::G1, //hint
 }
 
 impl<E: Pairing> LagPublicKey<E> {
@@ -245,7 +248,8 @@ impl<E: Pairing> PublicKey<E> {
 		// crs is {g^sk, g^{sk * tau}, g^{sk * tau^2}, ...}
 		// todo: move to https://eprint.iacr.org/2024/1279.pdf
 		let domain = Radix2EvaluationDomain::<E::ScalarField>::new(crs.n).unwrap();
-		let mut sk_li_lj_z = open_all_values::<E>(&self.y, &lag_polys.l[position].coeffs, &domain).unwrap();
+		let mut sk_li_lj_z =
+			open_all_values::<E>(&self.y, &lag_polys.l[position].coeffs, &domain).unwrap();
 
 		for (j, s) in sk_li_lj_z.iter_mut().enumerate().take(crs.n) {
 			*s *= domain.element(j) * lag_polys.denom;
@@ -306,7 +310,7 @@ mod tests {
 		let mut rng = ark_std::test_rng();
 		let n = 1 << 7;
 		let crs = CRS::<E>::new(n, &mut rng);
-		let lagpolys = LagPolys::<F>::new(n);
+		let lagpolys = LagPolys::<F>::new(n).unwrap();
 
 		let sk = SecretKey::<E>::new(&mut rng, 0);
 		let pk = sk.get_pk(&crs);

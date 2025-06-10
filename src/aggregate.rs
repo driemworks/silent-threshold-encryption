@@ -212,7 +212,7 @@ mod tests {
 		let n = 1 << 7;
 		let m = 1 << 10;
 		let crs = CRS::<E>::new(n, &mut ark_std::test_rng());
-		let lag_polys = LagPolys::<F>::new(n);
+		let lag_polys = LagPolys::<F>::new(n).unwrap();
 		use rayon::prelude::*;
 
 		let timer = start_timer!(|| "Setup Public Keys");

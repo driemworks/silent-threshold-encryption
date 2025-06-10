@@ -29,7 +29,11 @@ where
 
 // 1 at omega^i and 0 elsewhere on domain {omega^i}_{i \in [n]}
 pub fn lagrange_poly<F: FftField>(n: usize, i: usize) -> Result<DensePolynomial<F>, Error> {
-	debug_assert!(i < n);
+	
+	if i < n {
+		return Err(Error::IndexOutOfBounds);
+	}
+
 	//todo: check n is a power of 2
 	let mut evals = vec![];
 	for j in 0..n {
@@ -150,6 +154,20 @@ mod tests {
 	type E = Bls12_381;
 
 	#[test]
+	fn can_construct_lagrange_poly_with_valid_domain_size() {
+		let n = 1 << 8;
+		let i = n - 1;
+		assert!(lagrange_poly::<Fr>(n, i).is_ok());
+	}
+
+	#[test]
+	fn can_not_construct_lagrange_poly_with_too_large_domain_size() {
+		let n = u32::MAX;
+		let i = n - 1;
+		assert!(lagrange_poly::<Fr>(n as usize, i as usize).is_err());
+	}
+
+	#[test]
 	fn open_all_test_with_valid_domain() {
 		let mut rng = ark_std::test_rng();
 
@@ -183,7 +201,6 @@ mod tests {
 
 	#[test]
 	fn open_all_test_with_invalid_domain() {
-		let rng = ark_std::test_rng();
 		let n = u32::MAX;
 		let domain = Radix2EvaluationDomain::<Fr>::new(n as usize).unwrap();
 		let crs = CRS::<E>::new(1, &mut ark_std::test_rng());

@@ -58,7 +58,7 @@ fn main() {
 	let k = 1;
 
 	let crs = CRS::new(n, &mut rng);
-	let lag_polys = LagPolys::new(n);
+	let lag_polys = LagPolys::new(n).unwrap();
 
 	let sk = (0..n).map(|i| {
 		let mut rng = ark_std::test_rng();
