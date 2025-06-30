@@ -1,8 +1,7 @@
 use crate::{
-	crs::CRS,
-	error::Error,
-	types::Ciphertext,
-	utils::{lagrange_poly, open_all_values},
+    crs::CRS,
+    types::Ciphertext,
+    utils::{lagrange_poly, open_all_values},
 };
 use ark_ec::{pairing::Pairing, AffineRepr, PrimeGroup, VariableBaseMSM};
 use ark_ff::FftField;
@@ -30,11 +29,11 @@ impl<F: FftField> LagPolys<F> {
 	pub fn new(n: usize) -> Result<Self, Error> {
 		let domain = Radix2EvaluationDomain::<F>::new(n).ok_or(Error::DomainConstructionError)?;
 
-		// compute polynomial L_i(X)
-		let mut l = vec![DensePolynomial::zero(); n];
-		for (i, ell) in l.iter_mut().enumerate().take(n) {
-			*ell = lagrange_poly(n, i).unwrap();
-		}
+        // compute polynomial L_i(X)
+        let mut l = vec![DensePolynomial::zero(); n];
+        for (i, ell) in l.iter_mut().enumerate().take(n) {
+            *ell = lagrange_poly(n, i);
+        }
 
 		// compute polynomial (L_i(X) - L_i(0))*X
 		let mut l_minus0 = vec![DensePolynomial::zero(); n];
@@ -112,13 +111,14 @@ impl<E: Pairing> PartialDecryption<E> {
 /// Position oblivious public key -- slower to aggregate
 #[derive(CanonicalSerialize, CanonicalDeserialize, Serialize, Deserialize, Clone)]
 pub struct PublicKey<E: Pairing> {
-	#[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
-	pub bls_pk: E::G1, //BLS pk
-	#[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
-	pub hints: Vec<E::G1Affine>, //hints
-	#[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
-	pub y: Vec<E::G1Affine>, // preprocessed toeplitz matrix. only for efficiency and can be computed from hints
-	pub id: usize, // canonically assigned unique id in the system
+    #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
+    pub bls_pk: E::G1, //BLS pk
+    #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
+    pub hints: Vec<E::G1Affine>, //hints
+    #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
+    pub y: Vec<E::G1Affine>, /* preprocessed toeplitz matrix. only for efficiency and can be
+                              * computed from hints */
+    pub id: usize, // canonically assigned unique id in the system
 }
 
 /// Public key that can only be used in a fixed position -- faster to aggregate
@@ -166,9 +166,9 @@ impl<E: Pairing> SecretKey<E> {
 
 		let bls_pk = E::G1::generator() * self.sk;
 
-		for (i, hint) in hints.iter_mut().enumerate().take(crs.powers_of_g.len()) {
-			*hint = (crs.powers_of_g[i] * self.sk).into();
-		}
+        for (i, hint) in hints.iter_mut().enumerate().take(crs.powers_of_g.len()) {
+            *hint = (crs.powers_of_g[i] * self.sk).into();
+        }
 
 		// compute y
 		let mut y = vec![E::G1Affine::zero(); crs.y.len()];
@@ -241,15 +241,18 @@ impl<E: Pairing> PublicKey<E> {
 		)
 		.unwrap();
 
-		// compute sk*Li*Lj/Z = sk*Li/(X-omega^j)*(omega^j/denom) for all j in [n]\{i}
-		// for j = i: (Li^2 - Li)/Z = (Li - 1)/(X-omega^i)*(omega^i/denom)
-		// this is the same as computing KZG opening proofs at all points
-		// in the roots of unity domain for the polynomial Li(X), where the
-		// crs is {g^sk, g^{sk * tau}, g^{sk * tau^2}, ...}
-		// todo: move to https://eprint.iacr.org/2024/1279.pdf
-		let domain = Radix2EvaluationDomain::<E::ScalarField>::new(crs.n).unwrap();
-		let mut sk_li_lj_z =
-			open_all_values::<E>(&self.y, &lag_polys.l[position].coeffs, &domain).unwrap();
+        // compute sk*Li*Lj/Z = sk*Li/(X-omega^j)*(omega^j/denom) for all j in [n]\{i}
+        // for j = i: (Li^2 - Li)/Z = (Li - 1)/(X-omega^i)*(omega^i/denom)
+        // this is the same as computing KZG opening proofs at all points
+        // in the roots of unity domain for the polynomial Li(X), where the
+        // crs is {g^sk, g^{sk * tau}, g^{sk * tau^2}, ...}
+        // todo: move to https://eprint.iacr.org/2024/1279.pdf
+        let domain = Radix2EvaluationDomain::<E::ScalarField>::new(crs.n).unwrap();
+        let mut sk_li_lj_z = open_all_values::<E>(&self.y, &lag_polys.l[position].coeffs, &domain);
+
+        for (j, s) in sk_li_lj_z.iter_mut().enumerate().take(crs.n) {
+            *s *= domain.element(j) * lag_polys.denom;
+        }
 
 		for (j, s) in sk_li_lj_z.iter_mut().enumerate().take(crs.n) {
 			*s *= domain.element(j) * lag_polys.denom;
