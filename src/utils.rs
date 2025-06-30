@@ -71,13 +71,11 @@ pub fn interp_mostly_zero<F: Field>(points: &Vec<F>) -> DensePolynomial<F> {
 /// See https://github.com/khovratovich/Kate/blob/master/Kate_amortized.pdf
 /// eprint version has a bug and hasn't been updated
 pub fn open_all_values<E: Pairing>(
-	y: &[E::G1Affine],
-	f: &[E::ScalarField],
-	domain: &Radix2EvaluationDomain<E::ScalarField>,
-) -> Result<Vec<E::G1>, Error> {
-	let size = domain.size();
-	let top_domain = Radix2EvaluationDomain::<E::ScalarField>::new(2 * size)
-		.ok_or(Error::DomainConstructionError)?;
+    y: &[E::G1Affine],
+    f: &[E::ScalarField],
+    domain: &Radix2EvaluationDomain<E::ScalarField>,
+) -> Vec<E::G1> {
+    let top_domain = Radix2EvaluationDomain::<E::ScalarField>::new(2 * domain.size()).unwrap();
 
 	// use FK22 to get all the KZG proofs in O(nlog n) time =======================
 	// f = {f0 ,f1, ..., fd}
@@ -99,10 +97,8 @@ pub fn open_all_values<E: Pairing>(
 
 	h.truncate(size);
 
-	// fft on h to get KZG proofs
-	let pi = domain.fft(&h);
-
-	Ok(pi)
+    // fft on h to get KZG proofs
+    domain.fft(&h)
 }
 
 /// interpolates a polynomial where evaluations on points are zero and the polynomial evaluates to 1
@@ -141,10 +137,10 @@ pub fn open_all_values<E: Pairing>(
 
 #[cfg(test)]
 mod tests {
-	use ark_bls12_381::Bls12_381;
-	use ark_ec::{bls12::Bls12, pairing::Pairing, VariableBaseMSM};
-	use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, Polynomial};
-	use ark_std::{UniformRand, Zero};
+    use ark_bls12_381::Bls12_381;
+    use ark_ec::{bls12::Bls12, pairing::Pairing, VariableBaseMSM};
+    use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, Polynomial};
+    use ark_std::{UniformRand, Zero};
 
 	use crate::crs::CRS;
 

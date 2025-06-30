@@ -62,10 +62,10 @@ pub fn encrypt<E: Pairing>(
 	hk.expand(&[1], &mut aes_key).unwrap();
 	hk.expand(&[2], &mut aes_nonce).unwrap();
 
-	// encrypt the message m using the derived key
-	let aes_key: &Key<Aes256Gcm> = &aes_key.into();
-	let cipher = Aes256Gcm::new(aes_key);
-	let ct = cipher.encrypt(&aes_nonce.into(), m).unwrap();
+    // encrypt the message m using the derived key
+    let aes_key: &Key<Aes256Gcm> = &aes_key.into();
+    let cipher = Aes256Gcm::new(aes_key);
+    let ct = cipher.encrypt(&aes_nonce.into(), m).unwrap();
 
 	Ciphertext { gamma_g2, sa1, sa2, ct, t }
 }

@@ -1,5 +1,4 @@
-use crate::utils::lagrange_poly;
-use crate::utils::{ark_de, ark_se};
+use crate::utils::{ark_de, ark_se, lagrange_poly};
 use ark_ec::{pairing::Pairing, PrimeGroup, ScalarMul, VariableBaseMSM};
 use ark_ff::{Field, PrimeField};
 use ark_poly::{
@@ -76,8 +75,8 @@ impl<E: Pairing> CRS<E> {
 			li_evals_x[i] = li_evals_minus0[i] * tau2_inv;
 		}
 
-		let z_eval = tau.pow([n as u64]) - E::ScalarField::one();
-		let z_eval_inv = z_eval.inverse().unwrap();
+        let z_eval = tau.pow([n as u64]) - E::ScalarField::one();
+        let z_eval_inv = z_eval.inverse().unwrap();
 
 		let mut li = vec![E::G1::zero(); n];
 		let mut li_g2 = vec![E::G2::zero(); n];
@@ -122,12 +121,12 @@ impl<E: Pairing> CRS<E> {
 			}
 		}
 
-		// Compute the Toeplitz matrix preprocessing
-		// ==================================================
-		let mut top_tau = powers_of_tau.clone();
-		top_tau.truncate(n);
-		top_tau.reverse();
-		top_tau.resize(2 * n, E::ScalarField::zero());
+        // Compute the Toeplitz matrix preprocessing
+        // ==================================================
+        let mut top_tau = powers_of_tau.clone();
+        top_tau.truncate(n);
+        top_tau.reverse();
+        top_tau.resize(2 * n, E::ScalarField::zero());
 
 		let top_domain = Radix2EvaluationDomain::<E::ScalarField>::new(2 * n).unwrap();
 		let top_tau = top_domain.fft(&top_tau);
@@ -154,11 +153,11 @@ impl<E: Pairing> CRS<E> {
 		}
 	}
 
-	pub fn commit_g1(&self, coeffs: &[E::ScalarField]) -> E::G1 {
-		assert!(
-			coeffs.len() <= self.powers_of_g.len(),
-			"Too many coefficients for the given powers of tau"
-		);
+    pub fn commit_g1(&self, coeffs: &[E::ScalarField]) -> E::G1 {
+        assert!(
+            coeffs.len() <= self.powers_of_g.len(),
+            "Too many coefficients for the given powers of tau"
+        );
 
 		let plain_coeffs = coeffs.iter().map(|c| c.into_bigint()).collect::<Vec<_>>();
 		<E::G1 as VariableBaseMSM>::msm_bigint(
@@ -167,11 +166,11 @@ impl<E: Pairing> CRS<E> {
 		)
 	}
 
-	pub fn commit_g2(&self, coeffs: &[E::ScalarField]) -> E::G2 {
-		assert!(
-			coeffs.len() <= self.powers_of_g.len(),
-			"Too many coefficients for the given powers of tau"
-		);
+    pub fn commit_g2(&self, coeffs: &[E::ScalarField]) -> E::G2 {
+        assert!(
+            coeffs.len() <= self.powers_of_g.len(),
+            "Too many coefficients for the given powers of tau"
+        );
 
 		let plain_coeffs = coeffs.iter().map(|c| c.into_bigint()).collect::<Vec<_>>();
 		<E::G2 as VariableBaseMSM>::msm_bigint(
@@ -180,13 +179,13 @@ impl<E: Pairing> CRS<E> {
 		)
 	}
 
-	pub fn compute_opening_proof(
-		&self,
-		coeffs: &[E::ScalarField],
-		point: &E::ScalarField,
-	) -> E::G1 {
-		let polynomial = DensePolynomial::from_coefficients_slice(coeffs);
-		let eval = polynomial.evaluate(point);
+    pub fn compute_opening_proof(
+        &self,
+        coeffs: &[E::ScalarField],
+        point: &E::ScalarField,
+    ) -> E::G1 {
+        let polynomial = DensePolynomial::from_coefficients_slice(coeffs);
+        let eval = polynomial.evaluate(point);
 
 		let mut numerator = polynomial.clone();
 		numerator.coeffs[0] -= eval;
@@ -203,13 +202,13 @@ impl<E: Pairing> CRS<E> {
 
 #[cfg(test)]
 mod tests {
-	use ark_bls12_381::{Bls12_381 as E, Fr as F, G1Projective as G1, G2Projective as G2};
-	use ark_ec::{pairing::Pairing, PrimeGroup};
-	use ark_poly::{
-		univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, Polynomial,
-		Radix2EvaluationDomain,
-	};
-	use ark_std::{UniformRand, Zero};
+    use ark_bls12_381::{Bls12_381 as E, Fr as F, G1Projective as G1, G2Projective as G2};
+    use ark_ec::{pairing::Pairing, PrimeGroup};
+    use ark_poly::{
+        univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, Polynomial,
+        Radix2EvaluationDomain,
+    };
+    use ark_std::{UniformRand, Zero};
 
 	#[test]
 	fn test_sumcheck() {
