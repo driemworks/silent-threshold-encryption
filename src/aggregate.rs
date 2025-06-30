@@ -1,13 +1,12 @@
-use crate::{
-    crs::CRS,
-    setup::{LagPolys, LagPublicKey, PublicKey},
-    utils::{ark_de, ark_se},
-};
+use crate::crs::CRS;
+use crate::setup::{LagPolys, LagPublicKey, PublicKey};
+use crate::utils::{ark_de, ark_se};
 use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{end_timer, start_timer, One, Zero};
 use hopcroft_karp::matching;
-use rand::{Rng, SeedableRng};
+use rand::Rng;
+use rand::SeedableRng;
 use serde::{Deserialize, Serialize};
 
 #[derive(CanonicalSerialize, CanonicalDeserialize, Serialize, Deserialize, Clone)]
@@ -115,19 +114,16 @@ impl<E: Pairing> SystemPublicKeys<E> {
 
 		use rayon::prelude::*;
 
-        let timer = start_timer!(|| "Setup System Public Keys");
-        let mut lag_pks = vec![vec![]; m];
-        lag_pks
-            .par_iter_mut()
-            .enumerate()
-            .for_each(|(i, lag_pk_i)| {
-                let mut lag_pk_inner = vec![];
-                for j in 0..k {
-                    lag_pk_inner.push(pks[i].get_lag_public_key(positions[i][j], crs, lag_polys));
-                }
-                *lag_pk_i = lag_pk_inner;
-            });
-        end_timer!(timer);
+		let timer = start_timer!(|| "Setup System Public Keys");
+		let mut lag_pks = vec![vec![]; m];
+		lag_pks.par_iter_mut().enumerate().for_each(|(i, lag_pk_i)| {
+			let mut lag_pk_inner = vec![];
+			for j in 0..k {
+				lag_pk_inner.push(pks[i].get_lag_public_key(positions[i][j], crs, lag_polys));
+			}
+			*lag_pk_i = lag_pk_inner;
+		});
+		end_timer!(timer);
 
 		Self { m, k, pks, lag_pks }
 	}
@@ -181,23 +177,22 @@ impl<E: Pairing> SystemPublicKeys<E> {
 			*position -= self.m;
 		});
 
-        println!("Matching Size: {}/{}", res.len(), crs.n);
-        // create a new vector of lag public keys
-        let mut set_lag_pks = vec![];
-        for r in &res {
-            let (node, position) = r;
-            // check if the position is already present in the lag_pk
-            // and if so, push that lag_pk to the agg_pk
-            // otherwise, create a new lag public key
-            if let Some(lag_pk) = self.lag_pks[*node]
-                .iter()
-                .find(|&lag_pk| lag_pk.position == *position)
-            {
-                set_lag_pks.push(lag_pk.clone());
-            } else {
-                set_lag_pks.push(self.pks[*node].get_lag_public_key(*position, crs, lag_polys));
-            }
-        }
+		println!("Matching Size: {}/{}", res.len(), crs.n);
+		// create a new vector of lag public keys
+		let mut set_lag_pks = vec![];
+		for r in &res {
+			let (node, position) = r;
+			// check if the position is already present in the lag_pk
+			// and if so, push that lag_pk to the agg_pk
+			// otherwise, create a new lag public key
+			if let Some(lag_pk) =
+				self.lag_pks[*node].iter().find(|&lag_pk| lag_pk.position == *position)
+			{
+				set_lag_pks.push(lag_pk.clone());
+			} else {
+				set_lag_pks.push(self.pks[*node].get_lag_public_key(*position, crs, lag_polys));
+			}
+		}
 
 		AggregateKey::new(set_lag_pks, crs)
 	}
