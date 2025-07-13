@@ -11,16 +11,13 @@ use hkdf::Hkdf;
 use sha2::Sha256;
 
 use crate::{
-	aggregate::AggregateKey, 
-	crs::CRS, 
-	setup::PartialDecryption, 
-	types::Ciphertext,
+	aggregate::AggregateKey, crs::CRS, setup::PartialDecryption, types::Ciphertext,
 	utils::interp_mostly_zero,
 };
 
 pub fn agg_dec<E: Pairing>(
 	partial_decryptions: &[PartialDecryption<E>], /* insert 0 if a party did not respond or
-	                                                  * verification failed */
+	                                               * verification failed */
 	ct: &Ciphertext<E>,
 	selector: &[bool],
 	agg_key: &AggregateKey<E>,
@@ -148,9 +145,9 @@ mod tests {
 		setup::{PartialDecryption, SecretKey},
 	};
 
-    type E = ark_bls12_381::Bls12_381;
-    type G2 = <E as Pairing>::G2;
-    use ark_std::UniformRand;
+	type E = ark_bls12_381::Bls12_381;
+	type G2 = <E as Pairing>::G2;
+	use ark_std::UniformRand;
 
 	#[test]
 	fn test_decryption() {
@@ -171,10 +168,10 @@ mod tests {
 			.map(|(i, sk)| sk.get_lagrange_pk(i, &crs))
 			.collect::<Vec<_>>();
 
-        let (ak, ek) = AggregateKey::<E>::new(pk, &crs);
+		let (ak, ek) = AggregateKey::<E>::new(pk, &crs);
 
-        let gamma_g2 = G2::rand(&mut rng);
-        let ct = encrypt::<E>(&ek, t, &crs, gamma_g2, msg);
+		let gamma_g2 = G2::rand(&mut rng);
+		let ct = encrypt::<E>(&ek, t, &crs, gamma_g2, msg);
 
 		// compute partial decryptions
 		let mut partial_decryptions: Vec<PartialDecryption<E>> = Vec::new();
@@ -194,9 +191,6 @@ mod tests {
 			selector.push(false);
 		}
 
-        assert_eq!(
-            agg_dec(&partial_decryptions, &ct, &selector, &ak, &crs),
-            msg
-        );
-    }
+		assert_eq!(agg_dec(&partial_decryptions, &ct, &selector, &ak, &crs), msg);
+	}
 }

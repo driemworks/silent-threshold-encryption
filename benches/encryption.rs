@@ -21,14 +21,12 @@ fn bench_encrypt(c: &mut Criterion) {
 		.map(|(i, sk)| sk.get_lagrange_pk(i, &crs))
 		.collect::<Vec<_>>();
 
-    let (_ak, ek) = AggregateKey::<E>::new(pk, &crs);
-    let msg = b"Hello, world!";
+	let (_ak, ek) = AggregateKey::<E>::new(pk, &crs);
+	let msg = b"Hello, world!";
 
-    let gamma_g2 = G2::rand(&mut rng);
+	let gamma_g2 = G2::rand(&mut rng);
 
-    c.bench_function("encrypt", |b| {
-        b.iter(|| encrypt::<E>(&ek, t, &crs, gamma_g2, msg))
-    });
+	c.bench_function("encrypt", |b| b.iter(|| encrypt::<E>(&ek, t, &crs, gamma_g2, msg)));
 }
 
 criterion_group!(benches, bench_encrypt);

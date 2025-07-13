@@ -33,7 +33,7 @@ impl<F: FftField> LagPolys<F> {
 		// compute polynomial L_i(X)
 		let mut l = vec![DensePolynomial::zero(); n];
 		for (i, ell) in l.iter_mut().enumerate().take(n) {
-			*ell = lagrange_poly(n, i).unwrap();
+			*ell = lagrange_poly(n, i)?;
 		}
 
 		// compute polynomial (L_i(X) - L_i(0))*X
@@ -68,6 +68,8 @@ impl<F: FftField> LagPolys<F> {
 			denom *= F::one() - domain.element(i);
 		}
 
+		// Q: is this just for debugging/verification/sanity ?
+		// can I remove it?
 		// for i in 0..n {
 		//     for j in 0..n {
 		//         let monomial =
@@ -117,7 +119,8 @@ pub struct PublicKey<E: Pairing> {
 	#[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
 	pub hints: Vec<E::G1Affine>, //hints
 	#[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
-	pub y: Vec<E::G1Affine>, // preprocessed toeplitz matrix. only for efficiency and can be computed from hints
+	pub y: Vec<E::G1Affine>, /* preprocessed toeplitz matrix. only for efficiency and can be
+	                          * computed from hints */
 	pub id: usize, // canonically assigned unique id in the system
 }
 
@@ -308,7 +311,7 @@ mod tests {
 	#[test]
 	fn test_setup_lag_setup() {
 		let mut rng = ark_std::test_rng();
-		let n = 1 << 7;
+		let n = 1 << 4;
 		let crs = CRS::<E>::new(n, &mut rng);
 		let lagpolys = LagPolys::<F>::new(n).unwrap();
 

@@ -29,20 +29,23 @@ where
 
 // 1 at omega^i and 0 elsewhere on domain {omega^i}_{i \in [n]}
 pub fn lagrange_poly<F: FftField>(n: usize, i: usize) -> Result<DensePolynomial<F>, Error> {
-	
-	if i < n {
+	if i > n {
 		return Err(Error::IndexOutOfBounds);
 	}
 
-	//todo: check n is a power of 2
+	// suze must be a power of 2
+	// Note: this check is duplicated when constructing the domain, but we need to be sure
+	// the domain and the for loop below have the same indices, so we check it early
+	let size = n.checked_next_power_of_two().ok_or(Error::InvalidDomainSize)?;
+	//powers of nth root of unity
+	let domain = Radix2EvaluationDomain::<F>::new(size).ok_or(Error::DomainConstructionError)?;
+
 	let mut evals = vec![];
-	for j in 0..n {
+	for j in 0..size {
 		let l_of_x: u64 = if i == j { 1 } else { 0 };
 		evals.push(F::from(l_of_x));
 	}
 
-	//powers of nth root of unity
-	let domain = Radix2EvaluationDomain::<F>::new(n).ok_or(Error::DomainConstructionError)?;
 	let eval_form = Evaluations::from_vec_and_domain(evals, domain);
 	//interpolated polynomial over the n points
 	Ok(eval_form.interpolate())
@@ -157,14 +160,26 @@ mod tests {
 	fn can_construct_lagrange_poly_with_valid_domain_size() {
 		let n = 1 << 8;
 		let i = n - 1;
-		assert!(lagrange_poly::<Fr>(n, i).is_ok());
+		let res = lagrange_poly::<Fr>(n, i);
+		assert!(res.is_ok());
 	}
 
 	#[test]
 	fn can_not_construct_lagrange_poly_with_too_large_domain_size() {
-		let n = u32::MAX;
+		let n: usize = 1 << 33;
 		let i = n - 1;
-		assert!(lagrange_poly::<Fr>(n as usize, i as usize).is_err());
+		let res = lagrange_poly::<Fr>(n as usize, i as usize);
+		assert!(res.is_err());
+		assert_eq!(res, Err(Error::DomainConstructionError));
+	}
+
+	#[test]
+	fn can_not_construct_lagrange_poly_with_non_power_of_two_exceeding_max_size() {
+		let n = usize::MAX;
+		let i = n - 1;
+		let res = lagrange_poly::<Fr>(n as usize, i as usize);
+		assert!(res.is_err());
+		assert_eq!(res, Err(Error::InvalidDomainSize));
 	}
 
 	#[test]

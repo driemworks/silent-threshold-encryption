@@ -29,10 +29,10 @@ fn bench_decrypt(c: &mut Criterion) {
 			.map(|(i, sk)| sk.get_lagrange_pk(i, &crs))
 			.collect::<Vec<_>>();
 
-        let (ak, ek) = AggregateKey::<E>::new(pk, &crs);
-        let msg = b"Hello, world!";
-        let gamma_g2 = G2::rand(&mut rng);
-        let ct = encrypt::<E>(&ek, t, &crs, gamma_g2, msg);
+		let (ak, ek) = AggregateKey::<E>::new(pk, &crs);
+		let msg = b"Hello, world!";
+		let gamma_g2 = G2::rand(&mut rng);
+		let ct = encrypt::<E>(&ek, t, &crs, gamma_g2, msg);
 
 		// compute partial decryptions
 		let mut partial_decryptions: Vec<PartialDecryption<E>> = Vec::new();
@@ -52,14 +52,14 @@ fn bench_decrypt(c: &mut Criterion) {
 			selector.push(false);
 		}
 
-        group.bench_with_input(
-            BenchmarkId::from_parameter(n),
-            &(partial_decryptions, ct, selector, ak, crs),
-            |b, inp| {
-                b.iter(|| agg_dec(&inp.0, &inp.1, &inp.2, &inp.3, &inp.4));
-            },
-        );
-    }
+		group.bench_with_input(
+			BenchmarkId::from_parameter(n),
+			&(partial_decryptions, ct, selector, ak, crs),
+			|b, inp| {
+				b.iter(|| agg_dec(&inp.0, &inp.1, &inp.2, &inp.3, &inp.4));
+			},
+		);
+	}
 
 	group.finish();
 }
