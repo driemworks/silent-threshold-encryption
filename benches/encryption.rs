@@ -11,7 +11,7 @@ fn bench_encrypt(c: &mut Criterion) {
 	let mut rng = ark_std::test_rng();
 	let n = 8;
 	let t = 2;
-	let crs = CRS::<E>::new(n, &mut rng);
+	let crs = CRS::<E>::new(n, &mut rng).unwrap();
 
 	let sk = (0..n).map(|i| SecretKey::<E>::new(&mut rng, i)).collect::<Vec<_>>();
 

@@ -11,7 +11,7 @@ fn bench_setup(c: &mut Criterion) {
 	let mut rng = ark_std::test_rng();
 	for size in 3..=7 {
 		let n = 1 << size;
-		let crs = CRS::<E>::new(n, &mut rng);
+		let crs = CRS::<E>::new(n, &mut rng).unwrap();
 		let sk = SecretKey::<E>::new(&mut rng, 0);
 
 		group.bench_with_input(BenchmarkId::from_parameter(n), &crs, |b, inp| {

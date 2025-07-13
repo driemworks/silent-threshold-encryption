@@ -56,7 +56,7 @@ fn main() {
 	debug_assert!(t < n);
 	let k = 1;
 
-	let crs = CRS::new(n, &mut rng);
+	let crs = CRS::new(n, &mut rng).unwrap();
 	let lag_polys = LagPolys::new(n).unwrap();
 
 	let sk = (0..n)

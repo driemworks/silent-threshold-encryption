@@ -21,7 +21,7 @@ fn main() {
 	let k = 3;
 
 	let kzg_timer = start_timer!(|| "Setting up parameters");
-	let crs = CRS::new(n, &mut rng);
+	let crs = CRS::new(n, &mut rng).unwrap();
 	let lag_polys = LagPolys::new(n).unwrap();
 	end_timer!(kzg_timer);
 

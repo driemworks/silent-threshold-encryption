@@ -1,4 +1,7 @@
-use crate::utils::{ark_de, ark_se, lagrange_poly};
+use crate::{
+	error::Error,
+	utils::{ark_de, ark_se, lagrange_poly}
+};
 use ark_ec::{pairing::Pairing, PrimeGroup, ScalarMul, VariableBaseMSM};
 use ark_ff::{Field, PrimeField};
 use ark_poly::{
@@ -43,12 +46,12 @@ pub struct CRS<E: Pairing> {
 }
 
 impl<E: Pairing> CRS<E> {
-	pub fn new(n: usize, rng: &mut impl Rng) -> Self {
+	pub fn new(n: usize, rng: &mut impl Rng) -> Result<Self, Error> {
 		let tau = E::ScalarField::rand(rng);
 		Self::deterministic_new(n, tau)
 	}
 
-	pub fn deterministic_new(n: usize, tau: E::ScalarField) -> Self {
+	fn deterministic_new(n: usize, tau: E::ScalarField) -> Result<Self, Error> {
 		let mut powers_of_tau = vec![E::ScalarField::one()];
 
 		let mut cur = tau;
@@ -67,7 +70,7 @@ impl<E: Pairing> CRS<E> {
 
 		let tau2_inv: <E as Pairing>::ScalarField = (tau * tau).inverse().unwrap();
 		for i in 0..n {
-			let li = lagrange_poly(n, i).unwrap();
+			let li = lagrange_poly(n, i)?;
 			li_evals[i] = li.evaluate(&tau);
 
 			li_evals_minus0[i] = (li_evals[i] - li.coeffs[0]) * tau;
@@ -134,7 +137,7 @@ impl<E: Pairing> CRS<E> {
 		// Compute powers of top_tau
 		let y = E::G1::generator().batch_mul(&top_tau);
 
-		Self {
+		Ok(Self {
 			n,
 			powers_of_g,
 			powers_of_h,
@@ -150,7 +153,7 @@ impl<E: Pairing> CRS<E> {
 			li_lj_z_g2,
 
 			y,
-		}
+		})
 	}
 
 	pub fn commit_g1(&self, coeffs: &[E::ScalarField]) -> E::G1 {
@@ -251,7 +254,7 @@ mod tests {
 		let rng = &mut ark_std::test_rng();
 
 		let n = 1 << 3;
-		let crs = crate::crs::CRS::<E>::new(n, rng);
+		let crs = crate::crs::CRS::<E>::new(n, rng).unwrap();
 
 		// sample n random coeffs
 		let coeffs = (0..n).map(|_| F::rand(rng)).collect::<Vec<_>>();

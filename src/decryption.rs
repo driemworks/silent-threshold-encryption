@@ -156,7 +156,7 @@ mod tests {
 		let t: usize = 1;
 		debug_assert!(t < n);
 
-		let crs = CRS::new(n, &mut rng);
+		let crs = CRS::new(n, &mut rng).unwrap();
 
 		let msg = b"Hello, world!";
 

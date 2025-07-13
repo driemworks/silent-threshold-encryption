@@ -205,7 +205,7 @@ mod tests {
 	fn setup_system_public_keys() {
 		let n = 1 << 7;
 		let m = 1 << 10;
-		let crs = CRS::<E>::new(n, &mut ark_std::test_rng());
+		let crs = CRS::<E>::new(n, &mut ark_std::test_rng()).unwrap();
 		let lag_polys = LagPolys::<F>::new(n).unwrap();
 		use rayon::prelude::*;
 

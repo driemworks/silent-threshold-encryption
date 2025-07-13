@@ -188,7 +188,7 @@ mod tests {
 
 		let n = 1 << 8;
 		let domain = Radix2EvaluationDomain::<Fr>::new(n).unwrap();
-		let crs = CRS::<E>::new(n, &mut ark_std::test_rng());
+		let crs = CRS::<E>::new(n, &mut ark_std::test_rng()).unwrap();
 
 		let mut f: Vec<ark_ff::Fp<ark_ff::MontBackend<ark_bls12_381::FrConfig, 4>, 4>> =
 			vec![Fr::zero(); n];
@@ -218,7 +218,7 @@ mod tests {
 	fn open_all_test_with_invalid_domain() {
 		let n = u32::MAX;
 		let domain = Radix2EvaluationDomain::<Fr>::new(n as usize).unwrap();
-		let crs = CRS::<E>::new(1, &mut ark_std::test_rng());
+		let crs = CRS::<E>::new(1, &mut ark_std::test_rng()).unwrap();
 		let f: Vec<ark_ff::Fp<ark_ff::MontBackend<ark_bls12_381::FrConfig, 4>, 4>> =
 			vec![Fr::zero(); 1];
 

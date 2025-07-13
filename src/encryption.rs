@@ -87,7 +87,7 @@ mod tests {
 	fn test_encryption() {
 		let mut rng = ark_std::test_rng();
 		let n = 8;
-		let crs = CRS::new(n, &mut rng);
+		let crs = CRS::new(n, &mut rng).unwrap();
 
 		let msg = b"Hello, world!";
 

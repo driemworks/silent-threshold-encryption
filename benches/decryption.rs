@@ -19,7 +19,7 @@ fn bench_decrypt(c: &mut Criterion) {
 		let n = 1 << size; // actually n-1 total parties. one party is a dummy party that is always true
 		let t: usize = n / 2;
 
-		let crs = CRS::<E>::new(n, &mut rng);
+		let crs = CRS::<E>::new(n, &mut rng).unwrap();
 
 		let sk = (0..n).map(|i| SecretKey::<E>::new(&mut rng, i)).collect::<Vec<_>>();
 

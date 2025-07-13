@@ -2,7 +2,7 @@ use crate::{
 	crs::CRS,
 	error::Error,
 	types::Ciphertext,
-	utils::{lagrange_poly, open_all_values},
+	utils::{ark_de, ark_se, lagrange_poly, open_all_values},
 };
 use ark_ec::{pairing::Pairing, AffineRepr, PrimeGroup, VariableBaseMSM};
 use ark_ff::FftField;
@@ -13,7 +13,6 @@ use ark_poly::{
 use ark_serialize::*;
 use ark_std::{rand::RngCore, UniformRand, Zero};
 
-use crate::utils::{ark_de, ark_se};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, CanonicalDeserialize, CanonicalSerialize)]
@@ -288,7 +287,7 @@ mod tests {
 	fn test_setup() {
 		let mut rng = ark_std::test_rng();
 		let n = 1 << 4;
-		let crs = CRS::<E>::new(n, &mut rng);
+		let crs = CRS::<E>::new(n, &mut rng).unwrap();
 
 		let mut sk: Vec<SecretKey<E>> = Vec::new();
 		let mut pk: Vec<LagPublicKey<E>> = Vec::new();
@@ -312,7 +311,7 @@ mod tests {
 	fn test_setup_lag_setup() {
 		let mut rng = ark_std::test_rng();
 		let n = 1 << 4;
-		let crs = CRS::<E>::new(n, &mut rng);
+		let crs = CRS::<E>::new(n, &mut rng).unwrap();
 		let lagpolys = LagPolys::<F>::new(n).unwrap();
 
 		let sk = SecretKey::<E>::new(&mut rng, 0);
