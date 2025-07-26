@@ -113,7 +113,8 @@ impl<E: Pairing> SystemPublicKeys<E> {
 		lag_pks.par_iter_mut().enumerate().for_each(|(i, lag_pk_i)| {
 			let mut lag_pk_inner = vec![];
 			for j in 0..k {
-				lag_pk_inner.push(pks[i].get_lag_public_key(positions[i][j], crs, lag_polys));
+				lag_pk_inner
+					.push(pks[i].get_lag_public_key(positions[i][j], crs, lag_polys).unwrap());
 			}
 			*lag_pk_i = lag_pk_inner;
 		});
@@ -184,7 +185,8 @@ impl<E: Pairing> SystemPublicKeys<E> {
 			{
 				set_lag_pks.push(lag_pk.clone());
 			} else {
-				set_lag_pks.push(self.pks[*node].get_lag_public_key(*position, crs, lag_polys));
+				set_lag_pks
+					.push(self.pks[*node].get_lag_public_key(*position, crs, lag_polys).unwrap());
 			}
 		}
 

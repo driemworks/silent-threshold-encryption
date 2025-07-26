@@ -27,6 +27,7 @@ hopcroft-karp = { git = "https://github.com/microgravitas/hopcroft-karp" }
 sha2 = "0.10.9"
 hkdf = "0.12.4"
 aes-gcm = "0.10.3"
+proptest = "1.7.0"
 
 [features]
 asm = ["ark-ff/asm"]

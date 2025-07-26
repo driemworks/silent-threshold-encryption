@@ -1,6 +1,6 @@
 use crate::{
 	error::Error,
-	utils::{ark_de, ark_se, lagrange_poly}
+	utils::{ark_de, ark_se, lagrange_poly},
 };
 use ark_ec::{pairing::Pairing, PrimeGroup, ScalarMul, VariableBaseMSM};
 use ark_ff::{Field, PrimeField};
@@ -12,7 +12,9 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{rand::Rng, One, UniformRand, Zero};
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, CanonicalSerialize, CanonicalDeserialize, Serialize, Deserialize)]
+#[derive(
+	Clone, Debug, CanonicalSerialize, CanonicalDeserialize, Serialize, Deserialize, PartialEq,
+)]
 pub struct CRS<E: Pairing> {
 	pub n: usize, // maximum number of parties in a committee
 	#[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
@@ -48,27 +50,31 @@ pub struct CRS<E: Pairing> {
 impl<E: Pairing> CRS<E> {
 	pub fn new(n: usize, rng: &mut impl Rng) -> Result<Self, Error> {
 		let tau = E::ScalarField::rand(rng);
+		// fail early if the domain size allocation exceeds memory
+		n.checked_mul(n).ok_or(Error::InvalidDomainSize)?;
 		Self::deterministic_new(n, tau)
 	}
 
 	fn deterministic_new(n: usize, tau: E::ScalarField) -> Result<Self, Error> {
-		let mut powers_of_tau = vec![E::ScalarField::one()];
-
-		let mut cur = tau;
-		for _ in 0..=n {
-			powers_of_tau.push(cur);
-			cur *= &tau;
+		// fail early on invalid tau - not a branch on a secret since the value is invalid
+		if tau.is_zero() {
+			return Err(Error::InvalidTau);
 		}
 
-		let powers_of_g = E::G1::generator().batch_mul(&powers_of_tau[0..n + 1]);
-		let powers_of_h = E::G2::generator().batch_mul(&powers_of_tau[0..n + 1]);
+		let z_eval = tau.pow([n as u64]) - E::ScalarField::one();
+		// we already know tau != 0, so this only happens when n = 0
+		// and if n = 0 then everything is zero sized, so we can have a HARD failure
+		// without leaking anything useful to an attacker
+		let z_eval_inv = z_eval.inverse().ok_or(Error::InvalidDomainSize)?;
 
 		// lagrange powers
 		let mut li_evals: Vec<E::ScalarField> = vec![E::ScalarField::zero(); n];
 		let mut li_evals_minus0: Vec<E::ScalarField> = vec![E::ScalarField::zero(); n];
 		let mut li_evals_x: Vec<E::ScalarField> = vec![E::ScalarField::zero(); n];
+		// return zero if non-invertible to avoid side-channel attack
+		let tau2_inv: <E as Pairing>::ScalarField =
+			(tau * tau).inverse().unwrap_or(E::ScalarField::zero());
 
-		let tau2_inv: <E as Pairing>::ScalarField = (tau * tau).inverse().unwrap();
 		for i in 0..n {
 			let li = lagrange_poly(n, i)?;
 			li_evals[i] = li.evaluate(&tau);
@@ -78,8 +84,7 @@ impl<E: Pairing> CRS<E> {
 			li_evals_x[i] = li_evals_minus0[i] * tau2_inv;
 		}
 
-		let z_eval = tau.pow([n as u64]) - E::ScalarField::one();
-		let z_eval_inv = z_eval.inverse().unwrap();
+		//
 
 		let mut li = vec![E::G1::zero(); n];
 		let mut li_g2 = vec![E::G2::zero(); n];
@@ -89,6 +94,8 @@ impl<E: Pairing> CRS<E> {
 			li_g2[i] = E::G2::generator() * li_evals[i];
 		}
 
+		//
+
 		let mut li_minus0 = vec![E::G1::zero(); n];
 		let mut li_minus0_g2 = vec![E::G2::zero(); n];
 
@@ -96,6 +103,8 @@ impl<E: Pairing> CRS<E> {
 			li_minus0[i] = E::G1::generator() * li_evals_minus0[i];
 			li_minus0_g2[i] = E::G2::generator() * li_evals_minus0[i];
 		}
+
+		//
 
 		let mut li_x = vec![E::G1::zero(); n];
 		let mut li_x_g2 = vec![E::G2::zero(); n];
@@ -105,6 +114,7 @@ impl<E: Pairing> CRS<E> {
 			li_x_g2[i] = E::G2::generator() * li_evals_x[i];
 		}
 
+		//  Q: can we stream these?
 		let mut li_lj_z = vec![vec![E::G1::zero(); n]; n];
 		let mut li_lj_z_g2 = vec![vec![E::G2::zero(); n]; n];
 
@@ -124,6 +134,18 @@ impl<E: Pairing> CRS<E> {
 			}
 		}
 
+		// compute powers of tau
+		// ====================================================
+		let mut powers_of_tau = vec![E::ScalarField::one()];
+		let mut cur = tau;
+		for _ in 0..=n {
+			powers_of_tau.push(cur);
+			cur *= &tau;
+		}
+
+		let powers_of_g = E::G1::generator().batch_mul(&powers_of_tau[0..n + 1]);
+		let powers_of_h = E::G2::generator().batch_mul(&powers_of_tau[0..n + 1]);
+
 		// Compute the Toeplitz matrix preprocessing
 		// ==================================================
 		let mut top_tau = powers_of_tau.clone();
@@ -131,7 +153,8 @@ impl<E: Pairing> CRS<E> {
 		top_tau.reverse();
 		top_tau.resize(2 * n, E::ScalarField::zero());
 
-		let top_domain = Radix2EvaluationDomain::<E::ScalarField>::new(2 * n).unwrap();
+		let top_domain = Radix2EvaluationDomain::<E::ScalarField>::new(2 * n)
+			.ok_or(Error::DomainConstructionError)?;
 		let top_tau = top_domain.fft(&top_tau);
 
 		// Compute powers of top_tau
@@ -205,6 +228,7 @@ impl<E: Pairing> CRS<E> {
 
 #[cfg(test)]
 mod tests {
+	use super::*;
 	use ark_bls12_381::{Bls12_381 as E, Fr as F, G1Projective as G1, G2Projective as G2};
 	use ark_ec::{pairing::Pairing, PrimeGroup};
 	use ark_poly::{
@@ -268,5 +292,32 @@ mod tests {
 		let lhs = E::pairing(com + (G1::generator() * (-eval)), G2::generator());
 		let rhs = E::pairing(pi, crs.powers_of_h[1] - (G2::generator() * point));
 		assert_eq!(lhs, rhs);
+	}
+
+	#[test]
+	fn test_new_with_too_large_domain_fails() {
+		let rng = &mut ark_std::test_rng();
+		let n = usize::MAX;
+		let res = crate::crs::CRS::<E>::new(n, rng);
+		assert!(res.is_err());
+		assert_eq!(res, Err(Error::InvalidDomainSize));
+	}
+
+	#[test]
+	fn test_deterministic_new_with_zero_tau_fails() {
+		let tau = <E as Pairing>::ScalarField::zero();
+		let n = 0;
+		let res = crate::crs::CRS::<E>::deterministic_new(n, tau);
+		assert!(res.is_err());
+		assert_eq!(res, Err(Error::InvalidTau));
+	}
+
+	#[test]
+	fn test_new_with_non_invertible_z_eval_fails() {
+		let tau = <E as Pairing>::ScalarField::one();
+		let n = 0;
+		let res = crate::crs::CRS::<E>::deterministic_new(n, tau);
+		assert!(res.is_err());
+		assert_eq!(res, Err(Error::InvalidDomainSize));
 	}
 }

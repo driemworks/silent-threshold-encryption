@@ -32,3 +32,18 @@ Additionally, you can find individual unit tests at the end of the respective fi
 
 ## License
 This library is released under the MIT License.
+
+
+Error handling and unwrap?
+[x] utils.rs
+[x] crs.rs
+[ ] setup.rs
+[ ] aggregate.rs
+[ ] encryption.rs
+[ ] decryption.rs
+[ ] main.rs
+
+TODOs
+
+- add zeroize
+- use proptest 

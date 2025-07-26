@@ -1,6 +1,7 @@
 use crate::error::Error;
 use ark_ec::pairing::Pairing;
 use ark_ff::{FftField, Field};
+use ark_ec::models::short_weierstrass::{Affine, Projective};
 use ark_poly::{
 	univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, Evaluations, Polynomial,
 	Radix2EvaluationDomain,
@@ -32,8 +33,7 @@ pub fn lagrange_poly<F: FftField>(n: usize, i: usize) -> Result<DensePolynomial<
 	if i > n {
 		return Err(Error::IndexOutOfBounds);
 	}
-
-	// suze must be a power of 2
+	// size must be a power of 2
 	// Note: this check is duplicated when constructing the domain, but we need to be sure
 	// the domain and the for loop below have the same indices, so we check it early
 	let size = n.checked_next_power_of_two().ok_or(Error::InvalidDomainSize)?;

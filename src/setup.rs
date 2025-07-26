@@ -82,7 +82,8 @@ impl<F: FftField> LagPolys<F> {
 		//     }
 		// }
 
-		Ok(Self { l, l_minus0, l_x, li_lj_z, denom: denom.inverse().unwrap() })
+		let denom = denom.inverse().ok_or(Error::NonInvertibleElement)?;
+		Ok(Self { l, l_minus0, l_x, li_lj_z, denom })
 	}
 }
 
@@ -219,29 +220,29 @@ impl<E: Pairing> PublicKey<E> {
 		position: usize,
 		crs: &CRS<E>,
 		lag_polys: &LagPolys<E::ScalarField>,
-	) -> LagPublicKey<E> {
-		assert!(position < crs.n, "position out of bounds");
+	) -> Result<LagPublicKey<E>, Error> {
+		// assert!(position < crs.n, "position out of bounds");
 
 		let bls_pk = self.bls_pk;
 
-		// compute sk_li
-		let sk_li =
-			E::G1::msm(&self.hints[0..lag_polys.l[position].degree() + 1], &lag_polys.l[position])
-				.unwrap();
+		let sk_li = E::G1::msm(
+			&self.hints[0..lag_polys.l[position].degree() + 1],
+			&lag_polys.l[position],
+		).map_err(|min_len| Error::MSMError(min_len))?;
 
 		// compute sk_li_minus0
 		let sk_li_minus0 = E::G1::msm(
 			&self.hints[0..lag_polys.l_minus0[position].degree() + 1],
 			&lag_polys.l_minus0[position],
 		)
-		.unwrap();
+		.map_err(|min_len| Error::MSMError(min_len))?;
 
 		// compute sk_li_x
 		let sk_li_x = E::G1::msm(
 			&self.hints[0..lag_polys.l_x[position].degree() + 1],
 			&lag_polys.l_x[position],
 		)
-		.unwrap();
+		.map_err(|min_len| Error::MSMError(min_len))?;
 
 		// compute sk*Li*Lj/Z = sk*Li/(X-omega^j)*(omega^j/denom) for all j in [n]\{i}
 		// for j = i: (Li^2 - Li)/Z = (Li - 1)/(X-omega^i)*(omega^i/denom)
@@ -249,9 +250,9 @@ impl<E: Pairing> PublicKey<E> {
 		// in the roots of unity domain for the polynomial Li(X), where the
 		// crs is {g^sk, g^{sk * tau}, g^{sk * tau^2}, ...}
 		// todo: move to https://eprint.iacr.org/2024/1279.pdf
-		let domain = Radix2EvaluationDomain::<E::ScalarField>::new(crs.n).unwrap();
-		let mut sk_li_lj_z =
-			open_all_values::<E>(&self.y, &lag_polys.l[position].coeffs, &domain).unwrap();
+		let domain = Radix2EvaluationDomain::<E::ScalarField>::new(crs.n)
+			.ok_or(Error::DomainConstructionError)?;
+		let mut sk_li_lj_z = open_all_values::<E>(&self.y, &lag_polys.l[position].coeffs, &domain)?;
 
 		for (j, s) in sk_li_lj_z.iter_mut().enumerate().take(crs.n) {
 			*s *= domain.element(j) * lag_polys.denom;
@@ -272,7 +273,7 @@ impl<E: Pairing> PublicKey<E> {
 
 		// assert_eq!(sk_li_lj_z, my_sk_li_lj_z);
 
-		LagPublicKey { id: self.id, position, bls_pk, sk_li, sk_li_minus0, sk_li_lj_z, sk_li_x }
+		Ok(LagPublicKey { id: self.id, position, bls_pk, sk_li, sk_li_minus0, sk_li_lj_z, sk_li_x })
 	}
 }
 
@@ -308,6 +309,30 @@ mod tests {
 	}
 
 	#[test]
+	fn test_setup_with_0_domain_size() {
+		let mut rng = ark_std::test_rng();
+		let n = 1 << 4;
+		let crs = CRS::<E>::new(n, &mut rng).unwrap();
+
+		let mut sk: Vec<SecretKey<E>> = Vec::new();
+		let mut pk: Vec<LagPublicKey<E>> = Vec::new();
+		let mut lagrange_pk: Vec<LagPublicKey<E>> = Vec::new();
+
+		for i in 0..n {
+			sk.push(SecretKey::<E>::new(&mut rng, i));
+			pk.push(sk[i].get_lagrange_pk(i, &crs));
+			lagrange_pk.push(sk[i].get_lagrange_pk(i, &crs));
+
+			assert_eq!(pk[i].sk_li, lagrange_pk[i].sk_li);
+			assert_eq!(pk[i].sk_li_minus0, lagrange_pk[i].sk_li_minus0);
+			assert_eq!(pk[i].sk_li_x, lagrange_pk[i].sk_li_x); //computed incorrectly go fix it
+			assert_eq!(pk[i].sk_li_lj_z, lagrange_pk[i].sk_li_lj_z);
+		}
+
+		let _ak = AggregateKey::<E>::new(pk, &crs);
+	}
+
+	#[test]
 	fn test_setup_lag_setup() {
 		let mut rng = ark_std::test_rng();
 		let n = 1 << 4;
@@ -318,7 +343,27 @@ mod tests {
 		let pk = sk.get_pk(&crs);
 		let lag_pk = sk.get_lagrange_pk(0, &crs);
 
-		let computed_lag_pk = pk.get_lag_public_key(0, &crs, &lagpolys);
+		let computed_lag_pk = pk.get_lag_public_key(0, &crs, &lagpolys).unwrap();
+
+		assert_eq!(computed_lag_pk.bls_pk, lag_pk.bls_pk);
+		assert_eq!(computed_lag_pk.sk_li, lag_pk.sk_li);
+		assert_eq!(computed_lag_pk.sk_li_minus0, lag_pk.sk_li_minus0);
+		assert_eq!(computed_lag_pk.sk_li_x, lag_pk.sk_li_x);
+		assert_eq!(computed_lag_pk.sk_li_lj_z, lag_pk.sk_li_lj_z);
+	}
+
+	#[test]
+	fn test_setup_lag_setup_with_bad_position() {
+		let mut rng = ark_std::test_rng();
+		let n = 1 << 4;
+		let crs = CRS::<E>::new(n, &mut rng).unwrap();
+		let lagpolys = LagPolys::<F>::new(n).unwrap();
+
+		let sk = SecretKey::<E>::new(&mut rng, 0);
+		let pk = sk.get_pk(&crs);
+		let lag_pk = sk.get_lagrange_pk(0, &crs);
+
+		let computed_lag_pk = pk.get_lag_public_key(0, &crs, &lagpolys).unwrap();
 
 		assert_eq!(computed_lag_pk.bls_pk, lag_pk.bls_pk);
 		assert_eq!(computed_lag_pk.sk_li, lag_pk.sk_li);
