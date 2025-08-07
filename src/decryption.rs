@@ -171,7 +171,7 @@ mod tests {
 		let (ak, ek) = AggregateKey::<E>::new(pk, &crs);
 
 		let gamma_g2 = G2::rand(&mut rng);
-		let ct = encrypt::<E>(&ek, t, &crs, gamma_g2, msg);
+		let ct = encrypt::<E>(&ek, t, &crs, gamma_g2, msg).unwrap();
 
 		// compute partial decryptions
 		let mut partial_decryptions: Vec<PartialDecryption<E>> = Vec::new();

@@ -300,7 +300,7 @@ mod tests {
 		let n = usize::MAX;
 		let res = crate::crs::CRS::<E>::new(n, rng);
 		assert!(res.is_err());
-		assert_eq!(res, Err(Error::InvalidDomainSize));
+		assert!(matches!(res, Err(Error::InvalidDomainSize)));
 	}
 
 	#[test]
@@ -309,7 +309,7 @@ mod tests {
 		let n = 0;
 		let res = crate::crs::CRS::<E>::deterministic_new(n, tau);
 		assert!(res.is_err());
-		assert_eq!(res, Err(Error::InvalidTau));
+		assert!(matches!(res, Err(Error::InvalidTau)));
 	}
 
 	#[test]
@@ -318,6 +318,6 @@ mod tests {
 		let n = 0;
 		let res = crate::crs::CRS::<E>::deterministic_new(n, tau);
 		assert!(res.is_err());
-		assert_eq!(res, Err(Error::InvalidDomainSize));
+		assert!(matches!(res, Err(Error::InvalidDomainSize)));
 	}
 }

@@ -1,7 +1,6 @@
 use crate::error::Error;
 use ark_ec::pairing::Pairing;
 use ark_ff::{FftField, Field};
-use ark_ec::models::short_weierstrass::{Affine, Projective};
 use ark_poly::{
 	univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, Evaluations, Polynomial,
 	Radix2EvaluationDomain,
@@ -170,7 +169,7 @@ mod tests {
 		let i = n - 1;
 		let res = lagrange_poly::<Fr>(n as usize, i as usize);
 		assert!(res.is_err());
-		assert_eq!(res, Err(Error::DomainConstructionError));
+		assert!(matches!(res, Err(Error::DomainConstructionError)));
 	}
 
 	#[test]
@@ -179,7 +178,7 @@ mod tests {
 		let i = n - 1;
 		let res = lagrange_poly::<Fr>(n as usize, i as usize);
 		assert!(res.is_err());
-		assert_eq!(res, Err(Error::InvalidDomainSize));
+		assert!(matches!(res, Err(Error::InvalidDomainSize)));
 	}
 
 	#[test]
@@ -224,6 +223,6 @@ mod tests {
 
 		let res = open_all_values::<E>(&crs.y, &f, &domain);
 		assert!(res.is_err());
-		assert_eq!(res, Err(Error::DomainConstructionError));
+		assert!(matches!(res, Err(Error::DomainConstructionError)));
 	}
 }

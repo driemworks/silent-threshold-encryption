@@ -37,7 +37,7 @@ This library is released under the MIT License.
 Error handling and unwrap?
 [x] utils.rs
 [x] crs.rs
-[ ] setup.rs
+[x] setup.rs
 [ ] aggregate.rs
 [ ] encryption.rs
 [ ] decryption.rs
@@ -47,3 +47,6 @@ TODOs
 
 - add zeroize
 - use proptest 
+
+- added thiserror!
+  - will use this to reprop errors when appropriate instead of redefining them

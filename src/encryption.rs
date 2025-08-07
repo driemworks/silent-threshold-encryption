@@ -1,4 +1,4 @@
-use crate::{aggregate::EncryptionKey, crs::CRS, types::Ciphertext};
+use crate::{aggregate::EncryptionKey, crs::CRS, error::Error, types::Ciphertext};
 use ark_ec::{pairing::Pairing, PrimeGroup};
 use ark_serialize::*;
 use ark_std::UniformRand;
@@ -15,7 +15,7 @@ pub fn encrypt<E: Pairing>(
 	crs: &CRS<E>,
 	gamma_g2: E::G2, // this should be hash_to_point(attestation_data)
 	m: &[u8],
-) -> Ciphertext<E> {
+) -> Result<Ciphertext<E>, crate::error::Error> {
 	let mut rng = ark_std::test_rng();
 
 	let g = crs.powers_of_g[0];
@@ -53,21 +53,25 @@ pub fn encrypt<E: Pairing>(
 	// enc_key = s4*e_gh
 	let enc_key = ek.e_gh.mul(s[4]);
 	let mut enc_key_bytes = Vec::new();
-	enc_key.serialize_compressed(&mut enc_key_bytes).unwrap();
+	// how do we test this line?!
+	enc_key.serialize_compressed(&mut enc_key_bytes)?;
 
 	// derive an encapsulation key from enc_key using an HKDF
 	let hk = Hkdf::<Sha256>::new(None, &enc_key_bytes);
 	let mut aes_key = [0u8; 32];
 	let mut aes_nonce = [0u8; 12];
-	hk.expand(&[1], &mut aes_key).unwrap();
-	hk.expand(&[2], &mut aes_nonce).unwrap();
+	// TODO: how to test?
+	hk.expand(&[1], &mut aes_key)?;
+	hk.expand(&[2], &mut aes_nonce)?;
 
 	// encrypt the message m using the derived key
+	// Q: we could make this more dynamic ala my tlock lib 
 	let aes_key: &Key<Aes256Gcm> = &aes_key.into();
 	let cipher = Aes256Gcm::new(aes_key);
-	let ct = cipher.encrypt(&aes_nonce.into(), m).unwrap();
+	let ct = cipher.encrypt(&aes_nonce.into(), m)
+		.map_err(|_| Error::EncrytionError)?;
 
-	Ciphertext { gamma_g2, sa1, sa2, ct, t }
+	Ok(Ciphertext { gamma_g2, sa1, sa2, ct, t })
 }
 
 #[cfg(test)]
@@ -103,7 +107,7 @@ mod tests {
 
 		let gamma_g2 = G2::rand(&mut rng);
 
-		let ct = encrypt::<E>(&ek, 2, &crs, gamma_g2, msg);
+		let ct = encrypt::<E>(&ek, 2, &crs, gamma_g2, msg).unwrap();
 
 		let mut ct_bytes = Vec::new();
 		ct.serialize_compressed(&mut ct_bytes).unwrap();
