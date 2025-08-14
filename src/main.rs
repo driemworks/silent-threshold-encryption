@@ -79,7 +79,7 @@ fn main() {
 
 	let mut rng = ark_std::test_rng();
 	let gamma_g2 = G2::rand(&mut rng);
-	let ct = encrypt::<E>(&ek, t, &crs, gamma_g2, msg).unwrap();
+	let ct = encrypt::<E, silent_threshold_encryption::types::MaskedResultImpl>(&ek, t, &crs, gamma_g2, msg).unwrap();
 
 	// sample t random signers positions
 	// let signer_positions = (0..crs.n).choose_multiple(&mut thread_rng, t);

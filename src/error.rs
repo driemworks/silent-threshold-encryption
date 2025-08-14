@@ -10,13 +10,16 @@ pub enum Error {
 	DomainConstructionError,
 	/// An opaque encryption error occurred
 	#[error("encryption error")]
-	EncrytionError,
+	EncryptionError,
 	/// hkdf failures
     #[error("hkdf error: {0}")]
     HkdfExpandError(#[from] hkdf::InvalidLength),
 	/// The supplied index exceeds the upper bound
 	#[error("The supplied index exceeds the upper bound")]
 	IndexOutOfBounds,
+	/// The CRS is improperly sized
+	#[error("The CRS is improperly sized.")]
+	InvalidCRS,
 	/// The size specified exceeds u64::MAX
 	#[error("The size specified exceeds u64::MAX")]
 	InvalidDomainSize,

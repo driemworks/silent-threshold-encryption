@@ -6,3 +6,6 @@ pub mod error;
 pub mod setup;
 pub mod types;
 pub mod utils;
+
+#[cfg(test)]
+pub mod test_utils;

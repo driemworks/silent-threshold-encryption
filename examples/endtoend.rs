@@ -43,7 +43,7 @@ fn main() {
 
 	let enc_timer = start_timer!(|| "Encrypting a message");
 	let gamma_g2 = G2::rand(&mut rng);
-	let ct = encrypt::<E>(&ek, t, &crs, gamma_g2, msg);
+	let ct = encrypt::<E, silent_threshold_encryption::types::MaskedResultImpl>(&ek, t, &crs, gamma_g2, msg).unwrap();
 	end_timer!(enc_timer);
 
 	println!("Computing partial decryptions");

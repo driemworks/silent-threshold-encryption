@@ -29,6 +29,7 @@ hkdf = { version = "0.12.4", features = ["std"] }
 aes-gcm = "0.10.3"
 proptest = "1.7.0"
 thiserror = "2.0.12"
+subtle = "2.6.1"
 
 [features]
 asm = ["ark-ff/asm"]

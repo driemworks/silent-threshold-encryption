@@ -33,13 +33,19 @@ Additionally, you can find individual unit tests at the end of the respective fi
 ## License
 This library is released under the MIT License.
 
+"Error handling philosophy" for crypto libs
+- avoid specific errors that can lead to side channel attacks or leak any important information
+  - e.g. when handling key material
+  - to do this: a general approach is to mask results and return an opaque error at the end
+    - for testing, we can have features gates that allow us to verify internals
+- don't 'fail fast' always, only when validating public input.
 
 Error handling and unwrap?
 [x] utils.rs
 [x] crs.rs
 [x] setup.rs
 [ ] aggregate.rs
-[ ] encryption.rs
+[x] encryption.rs
 [ ] decryption.rs
 [ ] main.rs
 
@@ -47,6 +53,7 @@ TODOs
 
 - add zeroize
 - use proptest 
-
+- we should look into using DudeCT for constant time verification checking
+- also looking into failure masking patterns
 - added thiserror!
   - will use this to reprop errors when appropriate instead of redefining them
