@@ -174,7 +174,7 @@ mod tests {
 			.map(|(i, sk)| sk.get_lagrange_pk(i, &crs))
 			.collect::<Vec<_>>();
 
-		let (ak, ek) = AggregateKey::<E>::new(pk, &crs);
+		let (ak, ek) = AggregateKey::<E>::new(pk, &crs).unwrap();
 
 		let gamma_g2 = G2::rand(&mut rng);
 		let ct = encrypt::<E>(&ek, t, &crs, gamma_g2, msg).unwrap();

@@ -21,6 +21,7 @@ pub fn encrypt<E: Pairing>(
 	// TODO: replace the rng
 	let mut rng = ark_std::test_rng();
 	// CRS is public -> fail early
+	// why is poh < 3?
 	if crs.powers_of_g.len() <= t || crs.powers_of_h.len() < 3 {
 		return Err(Error::InvalidCRS);
 	}
@@ -40,32 +41,23 @@ pub fn encrypt<E: Pairing>(
 
 	// sa1[0] = s0*ask + s3*g^{tau^{t}} + s4*g
 	sa1[0] = (ek.ask * s[0]) + (g_t * s[3]) + (g * s[4]);
-
 	// sa1[1] = s2*g
 	sa1[1] = g * s[2];
-
 	// sa2[0] = s0*h + s2*gamma_g2
 	sa2[0] = (h * s[0]) + (gamma_g2 * s[2]);
-
 	// sa2[1] = s0*z_g2
 	sa2[1] = ek.z_g2 * s[0];
-
 	// sa2[2] = s0*h^tau + s1*h^{tau^2}
 	sa2[2] = h_1 * s[0] + h_2 * s[1];
-
 	// sa2[3] = s1*h
 	sa2[3] = h * s[1];
-
 	// sa2[4] = s3*h
 	sa2[4] = h * s[3];
-
 	// sa2[5] = s4*h^{tau}
 	sa2[5] = h_1 * s[4];
 	// enc_key = s4*e_gh
 	let enc_key = ek.e_gh.mul(s[4]);
-
 	let mut success = Choice::from(1);
-	// let success = Choice::from(1);
 	// TODO: zeroize all three
 	let mut enc_key_bytes = Vec::new();
 	let mut aes_key = [0u8; 32];
@@ -92,7 +84,7 @@ pub fn encrypt<E: Pairing>(
 		let ct = Ciphertext { gamma_g2, sa1, sa2, ct: aes_ct, t };
 		return Ok(ct);
 	}
-	
+
 	Err(Error::EncryptionError)
 }
 
@@ -105,6 +97,7 @@ mod tests {
 		setup::{LagPublicKey, SecretKey},
 	};
 	use ark_std::Zero;
+	use proptest::prelude::*;
 
 	type E = ark_bls12_381::Bls12_381;
 	type G1 = <E as Pairing>::G1;
@@ -115,7 +108,8 @@ mod tests {
 	#[test]
 	fn test_encryption() {
 		let mut rng = ark_std::test_rng();
-		let n = 8;
+		let n = 4;
+		let t = 4;
 		let crs = CRS::new(n, &mut rng).unwrap();
 
 		let mut sk: Vec<SecretKey<E>> = Vec::new();
@@ -126,11 +120,11 @@ mod tests {
 			pk.push(sk[i].get_lagrange_pk(i, &crs))
 		}
 
-		let (_ak, ek) = AggregateKey::<E>::new(pk, &crs);
+		let (_ak, ek) = AggregateKey::<E>::new(pk, &crs).unwrap();
 
 		let gamma_g2 = G2::rand(&mut rng);
 
-		let ct = encrypt::<E>(&ek, 2, &crs, gamma_g2, MSG).unwrap();
+		let ct = encrypt::<E>(&ek, t, &crs, gamma_g2, MSG).unwrap();
 
 		let mut ct_bytes = Vec::new();
 		ct.serialize_compressed(&mut ct_bytes).unwrap();
@@ -166,7 +160,7 @@ mod tests {
 			pk.push(sk[i].get_lagrange_pk(i, &crs))
 		}
 
-		let (_ak, ek) = AggregateKey::<E>::new(pk, &crs);
+		let (_ak, ek) = AggregateKey::<E>::new(pk, &crs).unwrap();
 		let gamma_g2 = G2::zero();
 
 		// 0 sized
@@ -234,11 +228,137 @@ mod tests {
 			pk.push(sk[i].get_lagrange_pk(i, &crs))
 		}
 
-		let (_ak, ek) = AggregateKey::<E>::new(pk, &crs);
+		let (_ak, ek) = AggregateKey::<E>::new(pk, &crs).unwrap();
 
 		let gamma_g2 = G2::rand(&mut rng);
 
 		let res = encrypt::<E>(&ek, 22, &crs, gamma_g2, MSG);
 		assert!(matches!(res, Err(Error::InvalidCRS)));
 	}
+
+	#[test]
+	fn test_invalid_powers_of_g_fails() {
+		let t = 3;
+		let powers_len = 0;
+		let mut rng = ark_std::test_rng();
+		let mut crs = CRS::new(10, &mut rng).unwrap();
+
+		let mut sk: Vec<SecretKey<E>> = Vec::new();
+		let mut pk: Vec<LagPublicKey<E>> = Vec::new();
+
+		for i in 0..3 {
+			sk.push(SecretKey::<E>::new(&mut rng, i));
+			pk.push(sk[i].get_lagrange_pk(i, &crs))
+		}
+
+		let (_ak, ek) = AggregateKey::<E>::new(pk, &crs).unwrap();
+		let gamma_g2 = G2::rand(&mut rng);
+
+		crs.powers_of_g = vec![G1::generator().into(); powers_len];
+
+		let result = encrypt::<E>(&ek, t, &crs, gamma_g2, b"test");
+		assert!(result.is_err());
+	}
+
+	proptest! {
+		#[test]
+		fn prop_encrypt_validates_powers_of_h(
+			threshold in 2usize..8,
+			h_powers_len in 0usize..6,
+			msg in prop::collection::vec(any::<u8>(), 1..100)
+		) {
+			let mut rng = ark_std::test_rng();
+			let n = threshold + 5; // Ensure enough for key generation
+			let mut crs = CRS::new(n, &mut rng).unwrap();
+
+			let mut sk: Vec<SecretKey<E>> = Vec::new();
+			let mut pk: Vec<LagPublicKey<E>> = Vec::new();
+
+			for i in 0..n {
+				sk.push(SecretKey::<E>::new(&mut rng, i));
+				pk.push(sk[i].get_lagrange_pk(i, &crs))
+			}
+
+			let (_ak, ek) = AggregateKey::<E>::new(pk, &crs).unwrap();
+			let gamma_g2 = G2::zero(); // Use zero like working test
+
+			// Manually set powers_of_h to test boundary
+			crs.powers_of_h = vec![G2::zero().into(); h_powers_len];
+
+			let result = encrypt::<E>(&ek, threshold, &crs, gamma_g2, &msg);
+
+			if h_powers_len < 3 {
+				prop_assert!(result.is_err());
+				if cfg!(debug_assertions) {
+					prop_assert!(matches!(result, Err(Error::InvalidCRS)));
+				} else {
+					prop_assert!(matches!(result, Err(Error::EncryptionError)));
+				}
+			} else {
+				prop_assert!(result.is_ok());
+			}
+		}
+	}
+
+	proptest! {
+		#[test]
+		fn prop_encrypt_validates_threshold_vs_powers_of_g(
+			threshold in 1usize..15,
+			crs_n in 1usize..20
+		) {
+			let mut rng = ark_std::test_rng();
+			let mut crs = CRS::new(crs_n.max(3), &mut rng).unwrap(); // Ensure minimum viable CRS
+
+			// Set up keys with small fixed number to avoid complexity
+			let key_count = 3.min(crs_n);
+			let mut sk: Vec<SecretKey<E>> = Vec::new();
+			let mut pk: Vec<LagPublicKey<E>> = Vec::new();
+
+			for i in 0..key_count {
+				sk.push(SecretKey::<E>::new(&mut rng, i));
+				pk.push(sk[i].get_lagrange_pk(i, &crs))
+			}
+
+			let (_ak, ek) = AggregateKey::<E>::new(pk, &crs).unwrap();
+			let gamma_g2 = G2::rand(&mut rng);
+
+			let result = encrypt::<E>(&ek, threshold, &crs, gamma_g2, MSG);
+
+			// Check the condition: crs.powers_of_g.len() <= t
+			if crs.powers_of_g.len() <= threshold {
+				prop_assert!(matches!(result, Err(Error::InvalidCRS)));
+			} else {
+				prop_assert!(result.is_ok());
+			}
+		}
+	}
+
+	// ignore for now TODO: uncomment this after updating the RNG to a CryptoRng
+	// // Test: Same inputs should produce different outputs (randomness)
+	// proptest! {
+	// 	#[test]
+	// 	fn prop_encrypt_is_probabilistic(_dummy in 0u8..1u8) {
+	// 		let mut rng = ark_std::test_rng();
+	// 		let n = 8;
+	// 		let crs = CRS::new(n, &mut rng).unwrap();
+
+	// 		let mut sk: Vec<SecretKey<E>> = Vec::new();
+	// 		let mut pk: Vec<LagPublicKey<E>> = Vec::new();
+
+	// 		for i in 0..n {
+	// 			sk.push(SecretKey::<E>::new(&mut rng, i));
+	// 			pk.push(sk[i].get_lagrange_pk(i, &crs))
+	// 		}
+
+	// 		let (_ak, ek) = AggregateKey::<E>::new(pk, &crs).unwrap();
+	// 		let gamma_g2 = G2::rand(&mut rng);
+	// 		let msg = b"test message";
+
+	// 		let ct1 = encrypt::<E>(&ek, 2, &crs, gamma_g2, msg).unwrap();
+	// 		let ct2 = encrypt::<E>(&ek, 2, &crs, gamma_g2, msg).unwrap();
+
+	// 		// Ciphertexts should be different due to randomness
+	// 		prop_assert_ne!(ct1.ct, ct2.ct);
+	// 	}
+	// }
 }

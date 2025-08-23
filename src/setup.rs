@@ -304,7 +304,7 @@ mod tests {
 			assert_eq!(pk[i].sk_li_lj_z, lagrange_pk[i].sk_li_lj_z);
 		}
 
-		let _ak = AggregateKey::<E>::new(pk, &crs);
+		let _ak = AggregateKey::<E>::new(pk, &crs).unwrap();
 	}
 
 	#[test]
@@ -328,7 +328,7 @@ mod tests {
 			assert_eq!(pk[i].sk_li_lj_z, lagrange_pk[i].sk_li_lj_z);
 		}
 
-		let _ak = AggregateKey::<E>::new(pk, &crs);
+		let _ak = AggregateKey::<E>::new(pk, &crs).unwrap();
 	}
 
 	#[test]

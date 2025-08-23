@@ -21,7 +21,7 @@ fn bench_encrypt(c: &mut Criterion) {
 		.map(|(i, sk)| sk.get_lagrange_pk(i, &crs))
 		.collect::<Vec<_>>();
 
-	let (_ak, ek) = AggregateKey::<E>::new(pk, &crs);
+	let (_ak, ek) = AggregateKey::<E>::new(pk, &crs).unwrap();
 	let msg = b"Hello, world!";
 
 	let gamma_g2 = G2::rand(&mut rng);

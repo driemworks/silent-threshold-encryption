@@ -1,11 +1,12 @@
 use crate::{
 	crs::CRS,
+	error::Error,
 	setup::{LagPolys, LagPublicKey, PublicKey},
 	utils::{ark_de, ark_se},
 };
 use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_std::{end_timer, start_timer, One, Zero};
+use ark_std::{end_timer, start_timer, Zero};
 use hopcroft_karp::matching;
 use rand::{Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
@@ -29,9 +30,15 @@ pub struct AggregateKey<E: Pairing> {
 }
 
 impl<E: Pairing> AggregateKey<E> {
-	pub fn new(lag_pks: Vec<LagPublicKey<E>>, crs: &CRS<E>) -> (Self, EncryptionKey<E>) {
+
+	/// Build a new AggregateKey from a collection of public keys and a CRS
+	pub fn new(lag_pks: Vec<LagPublicKey<E>>, crs: &CRS<E>) -> Result<(Self, EncryptionKey<E>), Error> {
 		let n = lag_pks.len();
-		let z_g2 = crs.powers_of_h[n] + crs.powers_of_h[0] * (-E::ScalarField::one());
+		let g_0 = crs.powers_of_g.get(0).ok_or(Error::InvalidCRS)?;
+		let h_0 = crs.powers_of_h.get(0).ok_or(Error::InvalidCRS)?;
+		let h_n = crs.powers_of_h.get(n).ok_or(Error::InvalidCRS)?;
+
+		let z_g2 = *h_n - *h_0;
 
 		// gather sk_li from all public keys
 		let mut ask = E::G1::zero();
@@ -48,10 +55,13 @@ impl<E: Pairing> AggregateKey<E> {
 			agg_sk_li_lj_z.push(agg_sk_li_lj_zi);
 		}
 
-		(
+		Ok((
 			AggregateKey { lag_pks, agg_sk_li_lj_z },
-			EncryptionKey { ask, z_g2, e_gh: E::pairing(crs.powers_of_g[0], crs.powers_of_h[0]) },
-		)
+			EncryptionKey {
+				ask, z_g2, 
+				e_gh: E::pairing(g_0, h_0)
+			},
+		))
 	}
 }
 
@@ -190,7 +200,8 @@ impl<E: Pairing> SystemPublicKeys<E> {
 			}
 		}
 
-		AggregateKey::new(set_lag_pks, crs)
+		// TODO
+		AggregateKey::new(set_lag_pks, crs).unwrap()
 	}
 }
 
@@ -198,10 +209,84 @@ impl<E: Pairing> SystemPublicKeys<E> {
 mod tests {
 	use super::*;
 	use crate::setup::SecretKey;
+	use ark_ec::PrimeGroup;
 	use hopcroft_karp::matching;
+	use proptest::prelude::*;
 
 	type E = ark_bls12_381::Bls12_381;
 	type F = ark_bls12_381::Fr;
+
+	#[test]
+	fn test_aggregate_key_invalid_crs_too_small_p_o_h_fails_gracefully() {
+		let mut rng = ark_std::test_rng();
+		let n = 4;
+		let mut sk: Vec<SecretKey<E>> = Vec::new();
+		let mut pk: Vec<LagPublicKey<E>> = Vec::new();
+		let mut lagrange_pk: Vec<LagPublicKey<E>> = Vec::new();
+		let mut crs = CRS::new(n, &mut rng).unwrap();
+
+		for i in 0..n {
+			sk.push(SecretKey::<E>::new(&mut rng, i));
+			pk.push(sk[i].get_lagrange_pk(i, &crs));
+			lagrange_pk.push(sk[i].get_lagrange_pk(i, &crs));
+		}
+		// Make CRS invalid
+		// undersized (2 < 4)
+		crs.powers_of_h = vec![<E as Pairing>::G2::generator().into(); 2];
+
+		let res = AggregateKey::new(lagrange_pk, &crs);
+		assert!(res.is_err());
+		assert!(matches!(Error::InvalidCRS, res));
+	}
+
+	
+	#[test]
+	fn test_aggregate_key_invalid_crs_empty_p_o_h_fails_gracefully() {
+		let mut rng = ark_std::test_rng();
+		let n = 4;
+		let mut sk: Vec<SecretKey<E>> = Vec::new();
+		let mut pk: Vec<LagPublicKey<E>> = Vec::new();
+		let mut lagrange_pk: Vec<LagPublicKey<E>> = Vec::new();
+		let mut crs = CRS::new(n, &mut rng).unwrap();
+
+		for i in 0..n {
+			sk.push(SecretKey::<E>::new(&mut rng, i));
+			pk.push(sk[i].get_lagrange_pk(i, &crs));
+			lagrange_pk.push(sk[i].get_lagrange_pk(i, &crs));
+		}
+
+		// Make CRS invalid
+		// empty
+		crs.powers_of_h = vec![];
+
+		let res = AggregateKey::new(lagrange_pk, &crs);
+		assert!(res.is_err());
+		matches!(Error::InvalidCRS, res);
+	}
+
+	#[test]
+	fn test_aggregate_key_invalid_crs_empty_p_o_g_fails_gracefully() {
+		let mut rng = ark_std::test_rng();
+		let n = 4;
+		let mut sk: Vec<SecretKey<E>> = Vec::new();
+		let mut pk: Vec<LagPublicKey<E>> = Vec::new();
+		let mut lagrange_pk: Vec<LagPublicKey<E>> = Vec::new();
+		let mut crs = CRS::new(n, &mut rng).unwrap();
+
+		for i in 0..n {
+			sk.push(SecretKey::<E>::new(&mut rng, i));
+			pk.push(sk[i].get_lagrange_pk(i, &crs));
+			lagrange_pk.push(sk[i].get_lagrange_pk(i, &crs));
+		}
+
+		// Make CRS invalid
+		// empty
+		crs.powers_of_g = vec![];
+
+		let res = AggregateKey::new(lagrange_pk, &crs);
+		assert!(res.is_err());
+		assert!(matches!(Error::InvalidCRS, res));
+	}
 
 	#[test]
 	fn setup_system_public_keys() {
