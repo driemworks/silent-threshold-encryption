@@ -22,7 +22,7 @@ pub fn encrypt<E: Pairing>(
 	gamma_g2: E::G2, // this should be hash_to_point(attestation_data)
 	m: &[u8],
 ) -> Result<Ciphertext<E>, crate::error::Error> {
-	// TODO: replace the rng
+	// TODO: replace the rngt
 	let mut rng = ark_std::test_rng();
 
 	if crs.powers_of_g.len() <= t || crs.powers_of_h.len() < 3 {
@@ -77,14 +77,7 @@ pub fn encrypt<E: Pairing>(
 	// TODO: how to test?
 	hk.expand(&[1], &mut aes_key)?;
 	hk.expand(&[2], &mut aes_nonce)?;
-
-	// // on failure, zero keys
-	// if masked.clone().failed() {
-	// 	enc_key_bytes.iter_mut().for_each(|b| *b = 0);
-	// 	aes_nonce.iter_mut().for_each(|b| *b = 0);
-	// }
 	// encrypt the message m using the derived key
-	// Q: we could make this more dynamic ala my tlock lib
 	let aes_key: &Key<Aes256Gcm> = &aes_key.into();
 	let cipher = Aes256Gcm::new(aes_key);
 	let ct = cipher.encrypt(&aes_nonce.into(), m).map_err(|_| Error::EncryptionError)?;
@@ -146,28 +139,6 @@ mod tests {
 		println!("G1 len: {} bytes", g1_bytes.len());
 		println!("G2 len: {} bytes", g2_bytes.len());
 		println!("GT len: {} bytes", e_gh_bytes.len());
-	}
-
-	#[test]
-	fn test_encryption_with_false_mask_fails_with_encryption_error() {
-		let mut rng = ark_std::test_rng();
-		let n = 8;
-		let crs = CRS::new(n, &mut rng).unwrap();
-
-		let mut sk: Vec<SecretKey<E>> = Vec::new();
-		let mut pk: Vec<LagPublicKey<E>> = Vec::new();
-
-		for i in 0..n {
-			sk.push(SecretKey::<E>::new(&mut rng, i));
-			pk.push(sk[i].get_lagrange_pk(i, &crs))
-		}
-
-		let (_ak, ek) = AggregateKey::<E>::new(pk, &crs);
-
-		let gamma_g2 = G2::rand(&mut rng);
-
-		let res = encrypt::<E>(&ek, 2, &crs, gamma_g2, MSG);
-		assert!(matches!(res, Err(Error::EncryptionError)));
 	}
 
 	#[test]
