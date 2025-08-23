@@ -1,6 +1,6 @@
 //! common types
 use crate::utils::{ark_de, ark_se};
-use ark_ec::pairing::Pairing;
+use ark_ec::{pairing::Pairing, PrimeGroup};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use serde::{Deserialize, Serialize};
 
@@ -18,6 +18,15 @@ pub struct Ciphertext<E: Pairing> {
 	pub ct: Vec<u8>, //encrypted message
 	#[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
 	pub t: usize, //threshold
+}
+
+impl<E: Pairing> Default for Ciphertext<E> {
+	fn default() -> Ciphertext<E> {
+		let g1 = E::G1::generator();
+		let g2 = <E as Pairing>::G2::generator();
+
+		Self { gamma_g2: g2, sa1: [g1; 2], sa2: [g2; 6], ct: Vec::new(), t: 0 }
+	}
 }
 
 impl<E: Pairing> Ciphertext<E> {

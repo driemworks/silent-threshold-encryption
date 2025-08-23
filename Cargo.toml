@@ -3,14 +3,7 @@ name = "silent-threshold-encryption"
 version = "0.1.0"
 edition = "2021"
 
-[workspace]
-members = [".", "./masked-result"]
-
 [dependencies]
-
-# error handling
-masked-result = { path = "./masked-result" }
-
 criterion = { version = "0.5.0", features = ["html_reports"] }
 
 # threshold encryption

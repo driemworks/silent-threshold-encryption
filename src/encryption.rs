@@ -1,4 +1,4 @@
-use crate::{aggregate::EncryptionKey, crs::CRS, error::Error, masked, types::Ciphertext};
+use crate::{aggregate::EncryptionKey, crs::CRS, error::Error, types::Ciphertext};
 use aes_gcm::{aead::Aead, Aes256Gcm, Key, KeyInit};
 use ark_ec::{pairing::Pairing, PrimeGroup};
 use ark_serialize::*;
@@ -6,19 +6,21 @@ use ark_std::UniformRand;
 use hkdf::Hkdf;
 use sha2::Sha256;
 use std::ops::Mul;
+use subtle::Choice;
+
+type CryptoResult<T> = Result<T, Error>;
 
 /// t is the threshold for encryption and apk is the aggregated public key
-#[masked(Error::EncryptionError)]
 pub fn encrypt<E: Pairing>(
 	ek: &EncryptionKey<E>,
 	t: usize,
 	crs: &CRS<E>,
 	gamma_g2: E::G2, // this should be hash_to_point(attestation_data)
 	m: &[u8],
-) -> Result<Ciphertext<E>, crate::error::Error> {
-	// TODO: replace the rngt
+) -> CryptoResult<Ciphertext<E>> {
+	// TODO: replace the rng
 	let mut rng = ark_std::test_rng();
-
+	// CRS is public -> fail early
 	if crs.powers_of_g.len() <= t || crs.powers_of_h.len() < 3 {
 		return Err(Error::InvalidCRS);
 	}
@@ -33,6 +35,7 @@ pub fn encrypt<E: Pairing>(
 	let mut sa2 = [E::G2::generator(); 6];
 
 	// hazardous beyond this point
+	// Generate random scalars - this is fine to collect since it's not secret-dependent timing
 	let s = (0..5).map(|_| E::ScalarField::rand(&mut rng)).collect::<Vec<_>>();
 
 	// sa1[0] = s0*ask + s3*g^{tau^{t}} + s4*g
@@ -58,25 +61,39 @@ pub fn encrypt<E: Pairing>(
 
 	// sa2[5] = s4*h^{tau}
 	sa2[5] = h_1 * s[4];
-
 	// enc_key = s4*e_gh
 	let enc_key = ek.e_gh.mul(s[4]);
+
+	let mut success = Choice::from(1);
+	// let success = Choice::from(1);
+	// TODO: zeroize all three
 	let mut enc_key_bytes = Vec::new();
-	// how do we test this line?! also will thiserror still take care of it?
-	enc_key.serialize_compressed(&mut enc_key_bytes)?;
-	// derive an encapsulation key from enc_key using an HKDF
-	let hk = Hkdf::<Sha256>::new(None, &enc_key_bytes);
 	let mut aes_key = [0u8; 32];
 	let mut aes_nonce = [0u8; 12];
+	// how do we test this line?! also will thiserror still take care of it?
+	let res = enc_key.serialize_compressed(&mut enc_key_bytes);
+	success &= Choice::from(res.is_ok() as u8);
+	// derive an encapsulation key from enc_key using an HKDF
+	let hk = Hkdf::<Sha256>::new(None, &enc_key_bytes);
 	// TODO: how to test?
-	hk.expand(&[1], &mut aes_key)?;
-	hk.expand(&[2], &mut aes_nonce)?;
+	let res = hk.expand(&[1], &mut aes_key);
+	success &= Choice::from(res.is_ok() as u8);
+
+	let res = hk.expand(&[2], &mut aes_nonce);
+	success &= Choice::from(res.is_ok() as u8);
 	// encrypt the message m using the derived key
 	let aes_key: &Key<Aes256Gcm> = &aes_key.into();
 	let cipher = Aes256Gcm::new(aes_key);
-	let ct = cipher.encrypt(&aes_nonce.into(), m).map_err(|_| Error::EncryptionError)?;
+	let ct_res = cipher.encrypt(&aes_nonce.into(), m).map_err(|_| Error::EncryptionError);
+	success &= Choice::from(ct_res.is_ok() as u8);
 
-	Ok(Ciphertext { gamma_g2, sa1, sa2, ct, t })
+	if success.into() {
+		let aes_ct = ct_res.unwrap_or_else(|_| Vec::new());
+		let ct = Ciphertext { gamma_g2, sa1, sa2, ct: aes_ct, t };
+		return Ok(ct);
+	}
+	
+	Err(Error::EncryptionError)
 }
 
 #[cfg(test)]

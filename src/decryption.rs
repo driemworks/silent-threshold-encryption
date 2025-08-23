@@ -11,11 +11,10 @@ use hkdf::Hkdf;
 use sha2::Sha256;
 
 use crate::{
-	aggregate::AggregateKey, crs::CRS, error::Error, masked, setup::PartialDecryption,
+	aggregate::AggregateKey, crs::CRS, error::Error, setup::PartialDecryption,
 	types::Ciphertext, utils::interp_mostly_zero,
 };
 
-#[masked(Error::DecryptionError)]
 pub fn agg_dec<E: Pairing>(
 	partial_decryptions: &[PartialDecryption<E>], /* insert 0 if a party did not respond or
 	                                               * verification failed */
