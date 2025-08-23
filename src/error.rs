@@ -4,6 +4,8 @@ use thiserror::Error;
 // n, or decryption
 #[derive(Debug, Error)]
 pub enum Error {
+	#[error("AES decryption failed")]
+	AesDecryptError,
 	/// The domain could not be constructed
 	/// TODO: reprop errors?
 	#[error("The radix-2 domain could not be constructed.")]
@@ -12,8 +14,8 @@ pub enum Error {
 	#[error("encryption error")]
 	EncryptionError,
 	/// hkdf failures
-    #[error("hkdf error: {0}")]
-    HkdfExpandError(#[from] hkdf::InvalidLength),
+	#[error("hkdf error: {0}")]
+	HkdfExpandError(#[from] hkdf::InvalidLength),
 	/// The supplied index exceeds the upper bound
 	#[error("The supplied index exceeds the upper bound")]
 	IndexOutOfBounds,
@@ -28,12 +30,12 @@ pub enum Error {
 	InvalidTau,
 	/// An error occured during multiscalar multiplication
 	/// "msm error: length mismatch between bases and scalars; minimum length: {}",
-	#[error("msm error: length mismatch between bases and scalars; minimum length: {0}",)]
+	#[error("msm error: length mismatch between bases and scalars; minimum length: {0}")]
 	MSMError(usize),
 	/// The group or scalar field element is non-invertible.
-	#[error("The group or scalar field element is non-invertible.",)]
+	#[error("The group or scalar field element is non-invertible.")]
 	NonInvertibleElement,
 	/// an element could not be serialized
 	#[error("serialization error: {0}")]
-    SerializationError(#[from] ark_serialize::SerializationError),
+	SerializationError(#[from] ark_serialize::SerializationError),
 }

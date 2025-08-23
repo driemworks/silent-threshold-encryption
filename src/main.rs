@@ -118,7 +118,7 @@ fn main() {
 	// pd, ct
 	// panic!("{:?}", test0);
 
-	let dec_key = agg_dec(&partial_decryptions, &ct, &selector, &ak, &crs);
+	let dec_key = agg_dec(&partial_decryptions, &ct, &selector, &ak, &crs).unwrap();
 	end_timer!(dec_timer);
 	assert_eq!(dec_key, msg, "Decryption failed!");
 	println!("Decryption successful!");

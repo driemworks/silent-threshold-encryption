@@ -1,15 +1,9 @@
-use crate::{
-	aggregate::EncryptionKey,
-	crs::CRS,
-	error::Error,
-	types::Ciphertext,
-};
+use crate::{aggregate::EncryptionKey, crs::CRS, error::Error, masked, types::Ciphertext};
 use aes_gcm::{aead::Aead, Aes256Gcm, Key, KeyInit};
 use ark_ec::{pairing::Pairing, PrimeGroup};
 use ark_serialize::*;
 use ark_std::UniformRand;
 use hkdf::Hkdf;
-use crate::masked;
 use sha2::Sha256;
 use std::ops::Mul;
 

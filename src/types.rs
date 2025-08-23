@@ -1,7 +1,5 @@
 //! common types
-use crate::{
-	utils::{ark_de, ark_se},
-};
+use crate::utils::{ark_de, ark_se};
 use ark_ec::pairing::Pairing;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use serde::{Deserialize, Serialize};

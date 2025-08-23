@@ -225,10 +225,9 @@ impl<E: Pairing> PublicKey<E> {
 
 		let bls_pk = self.bls_pk;
 
-		let sk_li = E::G1::msm(
-			&self.hints[0..lag_polys.l[position].degree() + 1],
-			&lag_polys.l[position],
-		).map_err(|min_len| Error::MSMError(min_len))?;
+		let sk_li =
+			E::G1::msm(&self.hints[0..lag_polys.l[position].degree() + 1], &lag_polys.l[position])
+				.map_err(|min_len| Error::MSMError(min_len))?;
 
 		// compute sk_li_minus0
 		let sk_li_minus0 = E::G1::msm(

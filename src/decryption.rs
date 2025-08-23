@@ -11,10 +11,11 @@ use hkdf::Hkdf;
 use sha2::Sha256;
 
 use crate::{
-	aggregate::AggregateKey, crs::CRS, setup::PartialDecryption, types::Ciphertext,
-	utils::interp_mostly_zero,
+	aggregate::AggregateKey, crs::CRS, error::Error, masked, setup::PartialDecryption,
+	types::Ciphertext, utils::interp_mostly_zero,
 };
 
+#[masked(Error::DecryptionError)]
 pub fn agg_dec<E: Pairing>(
 	partial_decryptions: &[PartialDecryption<E>], /* insert 0 if a party did not respond or
 	                                               * verification failed */
@@ -22,7 +23,7 @@ pub fn agg_dec<E: Pairing>(
 	selector: &[bool],
 	agg_key: &AggregateKey<E>,
 	crs: &CRS<E>,
-) -> Vec<u8> {
+) -> Result<Vec<u8>, Error> {
 	let domain = Radix2EvaluationDomain::<E::ScalarField>::new(crs.n).unwrap();
 	let domain_elements: Vec<E::ScalarField> = domain.elements().collect();
 
@@ -68,7 +69,8 @@ pub fn agg_dec<E: Pairing>(
 		bases.push(agg_key.lag_pks[i].bls_pk.into());
 		scalars.push(b_evals[i]);
 	}
-	let mut apk = E::G1::msm(bases.as_slice(), scalars.as_slice()).unwrap();
+	let mut apk =
+		E::G1::msm(bases.as_slice(), scalars.as_slice()).map_err(|l| Error::MSMError(l))?;
 	apk *= n_inv;
 
 	// compute sigma = (\sum B(omega^i)partial_decryptions[i])/(n) for i in parties
@@ -78,7 +80,8 @@ pub fn agg_dec<E: Pairing>(
 		bases.push(partial_decryptions[i].signature.into());
 		scalars.push(b_evals[i]);
 	}
-	let mut sigma = E::G2::msm(bases.as_slice(), scalars.as_slice()).unwrap();
+	let mut sigma =
+		E::G2::msm(bases.as_slice(), scalars.as_slice()).map_err(|l| Error::MSMError(l))?;
 	sigma *= n_inv;
 
 	// compute Qx, Qhatx and Qz
@@ -88,7 +91,7 @@ pub fn agg_dec<E: Pairing>(
 		bases.push(agg_key.lag_pks[i].sk_li_x.into());
 		scalars.push(b_evals[i]);
 	}
-	let qx = E::G1::msm(bases.as_slice(), scalars.as_slice()).unwrap();
+	let qx = E::G1::msm(bases.as_slice(), scalars.as_slice()).map_err(|l| Error::MSMError(l))?;
 
 	let mut bases: Vec<<E as Pairing>::G1Affine> = Vec::new();
 	let mut scalars: Vec<<E as Pairing>::ScalarField> = Vec::new();
@@ -96,7 +99,7 @@ pub fn agg_dec<E: Pairing>(
 		bases.push(agg_key.lag_pks[i].sk_li_minus0.into());
 		scalars.push(b_evals[i]);
 	}
-	let qhatx = E::G1::msm(bases.as_slice(), scalars.as_slice()).unwrap();
+	let qhatx = E::G1::msm(bases.as_slice(), scalars.as_slice()).map_err(|l| Error::MSMError(l))?;
 
 	let mut bases: Vec<<E as Pairing>::G1Affine> = Vec::new();
 	let mut scalars: Vec<<E as Pairing>::ScalarField> = Vec::new();
@@ -104,7 +107,7 @@ pub fn agg_dec<E: Pairing>(
 		bases.push(agg_key.agg_sk_li_lj_z[i].into());
 		scalars.push(b_evals[i]);
 	}
-	let qz = E::G1::msm(bases.as_slice(), scalars.as_slice()).unwrap();
+	let qz = E::G1::msm(bases.as_slice(), scalars.as_slice()).map_err(|l| Error::MSMError(l))?;
 
 	// e(w1||sa1, sa2||w2)
 	let minus1 = -E::ScalarField::one();
@@ -122,20 +125,22 @@ pub fn agg_dec<E: Pairing>(
 
 	let enc_key = E::multi_pairing(enc_key_lhs, enc_key_rhs);
 	let mut enc_key_bytes = Vec::new();
-	enc_key.serialize_compressed(&mut enc_key_bytes).unwrap();
+	enc_key.serialize_compressed(&mut enc_key_bytes)?;
 
 	// derive an encapsulation key from enc_key using an HKDF
 	let hk = Hkdf::<Sha256>::new(None, &enc_key_bytes);
 	let mut aes_key = [0u8; 32];
 	let mut aes_nonce = [0u8; 12];
-	hk.expand(&[1], &mut aes_key).unwrap();
-	hk.expand(&[2], &mut aes_nonce).unwrap();
+	hk.expand(&[1], &mut aes_key)?;
+	hk.expand(&[2], &mut aes_nonce)?;
 
 	// encrypt the message m using the derived key
 	let aes_key: &Key<Aes256Gcm> = &aes_key.into();
 	let cipher = Aes256Gcm::new(aes_key);
 
-	cipher.decrypt(&aes_nonce.into(), ct.ct.as_ref()).unwrap()
+	cipher
+		.decrypt(&aes_nonce.into(), ct.ct.as_ref())
+		.map_err(|_| Error::AesDecryptError)
 }
 
 #[cfg(test)]
@@ -193,6 +198,6 @@ mod tests {
 			selector.push(false);
 		}
 
-		assert_eq!(agg_dec(&partial_decryptions, &ct, &selector, &ak, &crs), msg);
+		assert_eq!(agg_dec(&partial_decryptions, &ct, &selector, &ak, &crs).unwrap(), msg);
 	}
 }
