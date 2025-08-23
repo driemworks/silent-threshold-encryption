@@ -112,6 +112,8 @@ pub fn agg_dec<E: Pairing>(
 		[apk * (minus1), qz * (minus1), qx * (minus1), qhatx, bhat_g1 * (minus1), q0_g1 * (minus1)];
 	let w2 = [b_g2, sigma];
 
+	// hazard boundary: handling key material
+
 	let mut enc_key_lhs = w1.to_vec();
 	enc_key_lhs.append(&mut ct.sa1.to_vec());
 
@@ -171,7 +173,7 @@ mod tests {
 		let (ak, ek) = AggregateKey::<E>::new(pk, &crs);
 
 		let gamma_g2 = G2::rand(&mut rng);
-		let ct = encrypt::<E, crate::types::MaskedResultImpl>(&ek, t, &crs, gamma_g2, msg).unwrap();
+		let ct = encrypt::<E>(&ek, t, &crs, gamma_g2, msg).unwrap();
 
 		// compute partial decryptions
 		let mut partial_decryptions: Vec<PartialDecryption<E>> = Vec::new();

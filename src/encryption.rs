@@ -2,27 +2,26 @@ use crate::{
 	aggregate::EncryptionKey,
 	crs::CRS,
 	error::Error,
-	types::{Ciphertext, MaskedResult},
+	types::Ciphertext,
 };
 use aes_gcm::{aead::Aead, Aes256Gcm, Key, KeyInit};
 use ark_ec::{pairing::Pairing, PrimeGroup};
 use ark_serialize::*;
 use ark_std::UniformRand;
 use hkdf::Hkdf;
+use crate::masked;
 use sha2::Sha256;
 use std::ops::Mul;
 
 /// t is the threshold for encryption and apk is the aggregated public key
-pub fn encrypt<E: Pairing, M>(
+#[masked(Error::EncryptionError)]
+pub fn encrypt<E: Pairing>(
 	ek: &EncryptionKey<E>,
 	t: usize,
 	crs: &CRS<E>,
 	gamma_g2: E::G2, // this should be hash_to_point(attestation_data)
 	m: &[u8],
-) -> Result<Ciphertext<E>, crate::error::Error>
-where
-	M: MaskedResult + Clone,
-{
+) -> Result<Ciphertext<E>, crate::error::Error> {
 	// TODO: replace the rng
 	let mut rng = ark_std::test_rng();
 
@@ -39,6 +38,7 @@ where
 	let mut sa1 = [E::G1::generator(); 2];
 	let mut sa2 = [E::G2::generator(); 6];
 
+	// hazardous beyond this point
 	let s = (0..5).map(|_| E::ScalarField::rand(&mut rng)).collect::<Vec<_>>();
 
 	// sa1[0] = s0*ask + s3*g^{tau^{t}} + s4*g
@@ -65,33 +65,29 @@ where
 	// sa2[5] = s4*h^{tau}
 	sa2[5] = h_1 * s[4];
 
-	// ! we are handling key material here
-	let mut masked = M::new();
 	// enc_key = s4*e_gh
 	let enc_key = ek.e_gh.mul(s[4]);
 	let mut enc_key_bytes = Vec::new();
 	// how do we test this line?! also will thiserror still take care of it?
-	masked.update(enc_key.serialize_compressed(&mut enc_key_bytes));
+	enc_key.serialize_compressed(&mut enc_key_bytes)?;
 	// derive an encapsulation key from enc_key using an HKDF
 	let hk = Hkdf::<Sha256>::new(None, &enc_key_bytes);
 	let mut aes_key = [0u8; 32];
 	let mut aes_nonce = [0u8; 12];
 	// TODO: how to test?
-	let _ = masked.update(hk.expand(&[1], &mut aes_key));
-	let _ = masked.update(hk.expand(&[2], &mut aes_nonce));
+	hk.expand(&[1], &mut aes_key)?;
+	hk.expand(&[2], &mut aes_nonce)?;
 
-	// on failure, zero keys
-	if masked.clone().failed() {
-		enc_key_bytes.iter_mut().for_each(|b| *b = 0);
-		aes_nonce.iter_mut().for_each(|b| *b = 0);
-	}
+	// // on failure, zero keys
+	// if masked.clone().failed() {
+	// 	enc_key_bytes.iter_mut().for_each(|b| *b = 0);
+	// 	aes_nonce.iter_mut().for_each(|b| *b = 0);
+	// }
 	// encrypt the message m using the derived key
 	// Q: we could make this more dynamic ala my tlock lib
 	let aes_key: &Key<Aes256Gcm> = &aes_key.into();
 	let cipher = Aes256Gcm::new(aes_key);
 	let ct = cipher.encrypt(&aes_nonce.into(), m).map_err(|_| Error::EncryptionError)?;
-
-	masked.finalize()?;
 
 	Ok(Ciphertext { gamma_g2, sa1, sa2, ct, t })
 }
@@ -103,7 +99,6 @@ mod tests {
 		aggregate::AggregateKey,
 		crs::CRS,
 		setup::{LagPublicKey, SecretKey},
-		test_utils::TestMaskedResult,
 	};
 	use ark_std::Zero;
 
@@ -111,19 +106,13 @@ mod tests {
 	type G1 = <E as Pairing>::G1;
 	type G2 = <E as Pairing>::G2;
 
-	// a masked result that always returns Ok
-	type TrueMask = TestMaskedResult<true>;
-	// a masked result that always finalizes as an EncryptionError
-	type FalseMask = TestMaskedResult<false>;
-
-	const MSG = b"Hello, world!";
+	const MSG: &[u8] = b"Hello, world!";
 
 	#[test]
 	fn test_encryption() {
 		let mut rng = ark_std::test_rng();
 		let n = 8;
 		let crs = CRS::new(n, &mut rng).unwrap();
-
 
 		let mut sk: Vec<SecretKey<E>> = Vec::new();
 		let mut pk: Vec<LagPublicKey<E>> = Vec::new();
@@ -137,7 +126,7 @@ mod tests {
 
 		let gamma_g2 = G2::rand(&mut rng);
 
-		let ct = encrypt::<E, TrueMask>(&ek, 2, &crs, gamma_g2, MSG).unwrap();
+		let ct = encrypt::<E>(&ek, 2, &crs, gamma_g2, MSG).unwrap();
 
 		let mut ct_bytes = Vec::new();
 		ct.serialize_compressed(&mut ct_bytes).unwrap();
@@ -177,7 +166,7 @@ mod tests {
 
 		let gamma_g2 = G2::rand(&mut rng);
 
-		let res = encrypt::<E, FalseMask>(&ek, 2, &crs, gamma_g2, MSG);
+		let res = encrypt::<E>(&ek, 2, &crs, gamma_g2, MSG);
 		assert!(matches!(res, Err(Error::EncryptionError)));
 	}
 
@@ -200,22 +189,34 @@ mod tests {
 
 		// 0 sized
 		crs.powers_of_h = vec![];
-		let res = encrypt::<E, TrueMask>(&ek, 2, &crs, gamma_g2, MSG);
-		assert!(matches!(res, Err(Error::InvalidCRS)));
+		let res = encrypt::<E>(&ek, 2, &crs, gamma_g2, MSG);
+		if cfg!(debug_assertions) {
+			assert!(matches!(res, Err(Error::InvalidCRS)));
+		} else {
+			assert!(matches!(res, Err(Error::EncryptionError)));
+		}
 
 		// 1 sized
 		crs.powers_of_h = vec![G2::zero().into()];
-		let res = encrypt::<E, TrueMask>(&ek, 2, &crs, gamma_g2, MSG);
-		assert!(matches!(res, Err(Error::InvalidCRS)));
+		let res = encrypt::<E>(&ek, 2, &crs, gamma_g2, MSG);
+		if cfg!(debug_assertions) {
+			assert!(matches!(res, Err(Error::InvalidCRS)));
+		} else {
+			assert!(matches!(res, Err(Error::EncryptionError)));
+		}
 
 		// 2 sized
 		crs.powers_of_h = vec![G2::zero().into(), G2::zero().into()];
-		let res = encrypt::<E, TrueMask>(&ek, 2, &crs, gamma_g2, MSG);
-		assert!(matches!(res, Err(Error::InvalidCRS)));
+		let res = encrypt::<E>(&ek, 2, &crs, gamma_g2, MSG);
+		if cfg!(debug_assertions) {
+			assert!(matches!(res, Err(Error::InvalidCRS)));
+		} else {
+			assert!(matches!(res, Err(Error::EncryptionError)));
+		}
 
 		// with enough, encryption works again
 		crs.powers_of_h = vec![G2::zero().into(), G2::zero().into(), G2::zero().into()];
-		let ct = encrypt::<E, TrueMask>(&ek, 2, &crs, gamma_g2, MSG).unwrap();
+		let ct = encrypt::<E>(&ek, 2, &crs, gamma_g2, MSG).unwrap();
 
 		let mut ct_bytes = Vec::new();
 		ct.serialize_compressed(&mut ct_bytes).unwrap();
@@ -255,7 +256,7 @@ mod tests {
 
 		let gamma_g2 = G2::rand(&mut rng);
 
-		let res = encrypt::<E, TrueMask>(&ek, 22, &crs, gamma_g2, MSG);
+		let res = encrypt::<E>(&ek, 22, &crs, gamma_g2, MSG);
 		assert!(matches!(res, Err(Error::InvalidCRS)));
 	}
 }
