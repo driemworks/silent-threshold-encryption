@@ -30,7 +30,7 @@ fn main() {
 	let pk = sk.iter().map(|sk| sk.get_pk(&crs)).collect::<Vec<_>>();
 
 	let setup_timer = start_timer!(|| "Setting up system keys");
-	let system_keys = SystemPublicKeys::<E>::new(pk.clone(), &crs, &lag_polys, k);
+	let system_keys = SystemPublicKeys::<E>::new(pk.clone(), &crs, &lag_polys, k).unwrap();
 	end_timer!(setup_timer);
 
 	let subset_timer = start_timer!(|| "Computing the aggregate key of a subset");

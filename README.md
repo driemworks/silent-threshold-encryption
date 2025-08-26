@@ -57,30 +57,30 @@ TODOs
 - also looking into failure masking patterns
 - added thiserror!
   - will use this to reprop errors when appropriate instead of redefining them
-  - 
-### **Level 1: Traditional Unit Tests** ✅
+
+
+### **Traditional Unit Tests**
 - Basic functionality, edge cases, error conditions
 - **Limitation**: Only tests specific inputs you think of
 
-### **Level 2: Property-Based Testing** 🎯 (High ROI)
-Property-testing frameworks like Bolero make it easy to test Rust code with multiple fuzzing engines and apply multiple testing methods to the same harness. This tests:
+### **Property-Based Testing**
+- proptest
 - Invariants that should hold for ALL valid inputs
 - Probabilistic properties (e.g., "encryption should be randomized")
 - Mathematical properties specific to your cryptographic scheme
 
-### **Level 3: Fuzzing** 🔍 (Critical for crypto)
+### **Fuzzing**
 Fuzzing tests cryptographic authentication and feeds random inputs to find unexpected bugs, commonly used for security-sensitive software. This finds:
 - Crashes, panics, memory safety issues
 - Edge cases you didn't consider
 - Side-channel vulnerabilities
 
-### **Level 4: Constant-Time Verification** ⚡ (Essential)
-Your use of `subtle` is great, but you also need:
+### **Constant-Time Verification**
 - Timing-based tests to verify constant-time properties
 - Tools like `dudect` or specialized timing analysis
 - Statistical analysis of execution times
 
-### **Level 5: Formal Verification** 🏆 (Gold standard)
+### **Formal Verification**
 NIST is exploring formal methods within cryptographic certification programs, and Microsoft is rewriting SymCrypt in Rust to enable formal verification while defending against side-channel attacks. Tools like:
 - **Kani**: Proves properties about ALL possible executions
 - **CBMC**: Model checking for C/Rust
@@ -88,17 +88,7 @@ NIST is exploring formal methods within cryptographic certification programs, an
 
 ## Immediate Next Steps
 
-1. **Add property-based tests** using `proptest` or `quickcheck` - high impact, relatively easy
-2. **Set up fuzzing** with `cargo-fuzz` - critical for finding edge cases
-3. **Implement timing tests** to validate your `subtle` usage works
+1. **Add property-based tests** using `proptest` or `quickcheck`
+2. **Set up fuzzing** with `cargo-fuzz`
+3. **Implement timing tests**
 4. **Consider Kani integration** for memory safety proofs
-
-## Why This Matters
-
-Machine-assisted proofs of cryptographic primitives like AES-256-GCM verify that implementations are memory safe and functionally correct. For a threshold encryption scheme, you need confidence that:
-- No secret information leaks through timing
-- All mathematical properties hold
-- Implementation matches the cryptographic specification
-- No edge cases cause vulnerabilities
-
-The artifact above gives you a concrete roadmap from where you are now to production-ready cryptographic code with formal guarantees!

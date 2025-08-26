@@ -30,9 +30,11 @@ pub struct AggregateKey<E: Pairing> {
 }
 
 impl<E: Pairing> AggregateKey<E> {
-
 	/// Build a new AggregateKey from a collection of public keys and a CRS
-	pub fn new(lag_pks: Vec<LagPublicKey<E>>, crs: &CRS<E>) -> Result<(Self, EncryptionKey<E>), Error> {
+	pub fn new(
+		lag_pks: Vec<LagPublicKey<E>>,
+		crs: &CRS<E>,
+	) -> Result<(Self, EncryptionKey<E>), Error> {
 		let n = lag_pks.len();
 		let g_0 = crs.powers_of_g.get(0).ok_or(Error::InvalidCRS)?;
 		let h_0 = crs.powers_of_h.get(0).ok_or(Error::InvalidCRS)?;
@@ -57,10 +59,7 @@ impl<E: Pairing> AggregateKey<E> {
 
 		Ok((
 			AggregateKey { lag_pks, agg_sk_li_lj_z },
-			EncryptionKey {
-				ask, z_g2, 
-				e_gh: E::pairing(g_0, h_0)
-			},
+			EncryptionKey { ask, z_g2, e_gh: E::pairing(g_0, h_0) },
 		))
 	}
 }
@@ -71,10 +70,14 @@ impl<E: Pairing> AggregateKey<E> {
 /// hence, allowing for efficient aggregation and decryption
 #[derive(CanonicalSerialize, CanonicalDeserialize, Serialize, Deserialize, Clone)]
 pub struct SystemPublicKeys<E: Pairing> {
+	/// the total number of parties
 	pub m: usize,
+	/// the number of positions to randomly sample
 	pub k: usize,
+	/// the public keys
 	#[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
 	pub pks: Vec<PublicKey<E>>,
+	/// the lagrange pks
 	#[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
 	pub lag_pks: Vec<Vec<LagPublicKey<E>>>,
 }
@@ -85,7 +88,8 @@ impl<E: Pairing> SystemPublicKeys<E> {
 		crs: &CRS<E>,
 		lag_polys: &LagPolys<E::ScalarField>,
 		k: usize,
-	) -> Self {
+	) -> Result<Self, Error> {
+		// if k > crs.n => infinite loop
 		// using a deterministic seed for reproducibility across machines
 		// can derandomize using a random oracle
 		let mut rng = rand::rngs::StdRng::seed_from_u64(42);
@@ -123,6 +127,7 @@ impl<E: Pairing> SystemPublicKeys<E> {
 		lag_pks.par_iter_mut().enumerate().for_each(|(i, lag_pk_i)| {
 			let mut lag_pk_inner = vec![];
 			for j in 0..k {
+				// when does positions[i][j] not exist?
 				lag_pk_inner
 					.push(pks[i].get_lag_public_key(positions[i][j], crs, lag_polys).unwrap());
 			}
@@ -130,7 +135,7 @@ impl<E: Pairing> SystemPublicKeys<E> {
 		});
 		end_timer!(timer);
 
-		Self { m, k, pks, lag_pks }
+		Ok(Self { m, k, pks, lag_pks })
 	}
 
 	pub fn get_aggregate_key(
@@ -239,7 +244,6 @@ mod tests {
 		assert!(matches!(Error::InvalidCRS, res));
 	}
 
-	
 	#[test]
 	fn test_aggregate_key_invalid_crs_empty_p_o_h_fails_gracefully() {
 		let mut rng = ark_std::test_rng();
@@ -307,8 +311,73 @@ mod tests {
 			.unzip();
 		end_timer!(timer);
 
-		let _system_keys = SystemPublicKeys::<E>::new(pk.clone(), &crs, &lag_polys, 3);
+		let system_keys = SystemPublicKeys::<E>::new(pk.clone(), &crs, &lag_polys, 3);
+		// assert!(system_keys.is_ok());
 	}
+
+	#[test]
+	fn setup_system_public_keys_k_gt_n_fails() {
+		let n = 1 << 7;
+		let m = 1 << 10;
+		let crs = CRS::<E>::new(n, &mut ark_std::test_rng()).unwrap();
+		let lag_polys = LagPolys::<F>::new(n).unwrap();
+		use rayon::prelude::*;
+
+		let timer = start_timer!(|| "Setup Public Keys");
+		let (_sk, pk): (Vec<_>, Vec<_>) = (0..m)
+			.into_par_iter()
+			.map(|i| {
+				let sk = SecretKey::<E>::new(&mut ark_std::test_rng(), i);
+				let pk = sk.get_pk(&crs);
+				(sk, pk)
+			})
+			.unzip();
+		end_timer!(timer);
+
+		let system_keys = SystemPublicKeys::<E>::new(pk.clone(), &crs, &lag_polys, 300);
+		// assert!(system_keys.is_err());
+	}
+
+	// proptest! {
+	// 	#[test]
+	// 	fn prop_system_public_keys_construction_invariants(
+	// 		m in 1usize..20,      // number of parties
+	// 		k in 1usize..10,      // positions to sample
+	// 		crs_n in 5usize..30   // CRS size
+	// 	) {
+	// 		prop_assume!(k <= crs_n); // k must be <= CRS size for sampling to work
+
+	// 		let mut rng = ark_std::test_rng();
+	// 		let crs = CRS::new(crs_n, &mut rng).unwrap();
+	// 		let lag_polys = LagPolys::<E::ScalarField>::new(crs_n);
+
+	// 		// Generate m public keys
+	// 		let mut pks = Vec::new();
+	// 		for _ in 0..m {
+	// 			let sk = E::ScalarField::rand(&mut rng);
+	// 			let pk = PublicKey::new(sk, &crs).unwrap();
+	// 			pks.push(pk);
+	// 		}
+
+	// 		let system_pks = SystemPublicKeys::new(pks.clone(), &crs, &lag_polys, k);
+
+	// 		// Basic invariants
+	// 		prop_assert_eq!(system_pks.m, m);
+	// 		prop_assert_eq!(system_pks.k, k);
+	// 		prop_assert_eq!(system_pks.pks.len(), m);
+	// 		prop_assert_eq!(system_pks.lag_pks.len(), m);
+
+	// 		// Each party should have exactly k lagrange public keys
+	// 		for lag_pk_row in &system_pks.lag_pks {
+	// 			prop_assert_eq!(lag_pk_row.len(), k);
+	// 		}
+
+	// 		// Original public keys should be preserved
+	// 		for (original, stored) in pks.iter().zip(system_pks.pks.iter()) {
+	// 			prop_assert_eq!(original.pk, stored.pk);
+	// 		}
+	// 	}
+	// }
 
 	#[test]
 	fn test_kuhn_munkres() {
