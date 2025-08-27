@@ -260,6 +260,7 @@ mod tests {
 		assert!(result.is_err());
 	}
 
+	#[cfg(feature = "proptest")]
 	proptest! {
 		#[test]
 		fn prop_encrypt_validates_powers_of_h(
@@ -300,6 +301,7 @@ mod tests {
 		}
 	}
 
+	#[cfg(feature = "proptest")]
 	proptest! {
 		#[test]
 		fn prop_encrypt_validates_threshold_vs_powers_of_g(

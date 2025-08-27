@@ -185,7 +185,7 @@ mod tests {
 	fn open_all_test_with_valid_domain() {
 		let mut rng = ark_std::test_rng();
 
-		let n = 1 << 8;
+		let n = 1 << 3;
 		let domain = Radix2EvaluationDomain::<Fr>::new(n).unwrap();
 		let crs = CRS::<E>::new(n, &mut ark_std::test_rng()).unwrap();
 

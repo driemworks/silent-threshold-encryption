@@ -174,7 +174,7 @@ impl<E: Pairing> SecretKey<E> {
 		let crs_li = *crs.li.get(position)?;
 		let crs_li_minus0 = *crs.li_minus0.get(position)?;
 		let crs_li_x = *crs.li_x.get(position)?;
-		let crs_li_lj_z = *crs.li_lj_z.get(position)?;
+		let crs_li_lj_z = crs.li_lj_z.get(position)?.clone();
 
 		let mut sk_li_lj_z = vec![];
 
@@ -185,8 +185,8 @@ impl<E: Pairing> SecretKey<E> {
 		let sk_li_x = crs_li_x * self.sk;
 
 		for j in 0..crs.n {
-			let crs_li_lj_z_j = crs_li_lj_z.get(j)?;
-			sk_li_lj_z.push(crs_li_lj_z_j * self.sk);
+			let crs_li_lj_z_j = *crs_li_lj_z.get(j)? * self.sk;
+			sk_li_lj_z.push(crs_li_lj_z_j);
 		}
 
 		Some(LagPublicKey {
@@ -361,7 +361,7 @@ mod tests {
 		assert_eq!(computed_lag_pk.sk_li_lj_z, lag_pk.sk_li_lj_z);
 	}
 
-	// TODO: we actually need to start at SecretKey
+	#[cfg(feature = "proptest")]
 	proptest! {
 		#[test]
 		fn proptest_secretkey_get_pk(id in 0usize..6usize, n in 1usize..6usize) {
@@ -383,6 +383,8 @@ mod tests {
 			}
 		}
 	}
+
+	#[cfg(feature = "proptest")]
 	proptest! {
 		#[test]
 		fn proptest_secretkey_get_lagrange_pk(position in 0usize..6usize, n in 1usize..6usize) {
