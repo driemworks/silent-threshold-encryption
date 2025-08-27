@@ -89,7 +89,7 @@ impl<E: Pairing> SystemPublicKeys<E> {
 		lag_polys: &LagPolys<E::ScalarField>,
 		k: usize,
 	) -> Result<Self, Error> {
-		// if k > crs.n => infinite loop
+		// TODO: if k > crs.n => infinite loop
 		// using a deterministic seed for reproducibility across machines
 		// can derandomize using a random oracle
 		let mut rng = rand::rngs::StdRng::seed_from_u64(42);
@@ -232,8 +232,8 @@ mod tests {
 
 		for i in 0..n {
 			sk.push(SecretKey::<E>::new(&mut rng, i));
-			pk.push(sk[i].get_lagrange_pk(i, &crs));
-			lagrange_pk.push(sk[i].get_lagrange_pk(i, &crs));
+			pk.push(sk[i].get_lagrange_pk(i, &crs).unwrap());
+			lagrange_pk.push(sk[i].get_lagrange_pk(i, &crs).unwrap());
 		}
 		// Make CRS invalid
 		// undersized (2 < 4)
@@ -255,8 +255,8 @@ mod tests {
 
 		for i in 0..n {
 			sk.push(SecretKey::<E>::new(&mut rng, i));
-			pk.push(sk[i].get_lagrange_pk(i, &crs));
-			lagrange_pk.push(sk[i].get_lagrange_pk(i, &crs));
+			pk.push(sk[i].get_lagrange_pk(i, &crs).unwrap());
+			lagrange_pk.push(sk[i].get_lagrange_pk(i, &crs).unwrap());
 		}
 
 		// Make CRS invalid
@@ -279,8 +279,8 @@ mod tests {
 
 		for i in 0..n {
 			sk.push(SecretKey::<E>::new(&mut rng, i));
-			pk.push(sk[i].get_lagrange_pk(i, &crs));
-			lagrange_pk.push(sk[i].get_lagrange_pk(i, &crs));
+			pk.push(sk[i].get_lagrange_pk(i, &crs).unwrap());
+			lagrange_pk.push(sk[i].get_lagrange_pk(i, &crs).unwrap());
 		}
 
 		// Make CRS invalid
@@ -334,7 +334,7 @@ mod tests {
 			.unzip();
 		end_timer!(timer);
 
-		let system_keys = SystemPublicKeys::<E>::new(pk.clone(), &crs, &lag_polys, 300);
+		let system_keys = SystemPublicKeys::<E>::new(pk.clone(), &crs, &lag_polys, n);
 		// assert!(system_keys.is_err());
 	}
 

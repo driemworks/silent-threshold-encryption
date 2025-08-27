@@ -68,7 +68,7 @@ fn main() {
 
 	let pk = sk.iter().map(|sk| sk.get_pk(&crs)).collect::<Vec<_>>();
 
-	let system_keys = SystemPublicKeys::<E>::new(pk.clone(), &crs, &lag_polys, k);
+	let system_keys = SystemPublicKeys::<E>::new(pk.clone(), &crs, &lag_polys, k).unwrap();
 
 	let mut thread_rng = rand::rng(); // Create a random number generator
 								   // choose `n` random entries from [0, m]

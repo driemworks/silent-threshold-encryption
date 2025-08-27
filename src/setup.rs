@@ -67,29 +67,17 @@ impl<F: FftField> LagPolys<F> {
 			denom *= F::one() - domain.element(i);
 		}
 
-		// Q: is this just for debugging/verification/sanity ?
-		// can I remove it?
-		// for i in 0..n {
-		//     for j in 0..n {
-		//         let monomial =
-		//             DensePolynomial::from_coefficients_vec(vec![-domain.element(j), F::one()]);
-
-		//         let computed = &l[i] / &monomial;
-		//         assert_eq!(
-		//             li_lj_z[i][j].evaluate(&F::zero()),
-		//             computed.evaluate(&F::zero()) / (denom * domain.element(n - j))
-		//         );
-		//     }
-		// }
-
 		let denom = denom.inverse().ok_or(Error::NonInvertibleElement)?;
+
 		Ok(Self { l, l_minus0, l_x, li_lj_z, denom })
 	}
 }
 
 #[derive(CanonicalSerialize, CanonicalDeserialize, Serialize, Deserialize, Clone)]
 pub struct SecretKey<E: Pairing> {
+	/// Party id
 	pub id: usize,
+	/// Secret key in the scalar field
 	#[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
 	sk: E::ScalarField,
 }
@@ -182,20 +170,26 @@ impl<E: Pairing> SecretKey<E> {
 		PublicKey { id: self.id, bls_pk, hints, y }
 	}
 
-	pub fn get_lagrange_pk(&self, position: usize, crs: &CRS<E>) -> LagPublicKey<E> {
+	pub fn get_lagrange_pk(&self, position: usize, crs: &CRS<E>) -> Option<LagPublicKey<E>> {
+		let crs_li = *crs.li.get(position)?;
+		let crs_li_minus0 = *crs.li_minus0.get(position)?;
+		let crs_li_x = *crs.li_x.get(position)?;
+		let crs_li_lj_z = *crs.li_lj_z.get(position)?;
+
 		let mut sk_li_lj_z = vec![];
 
-		let sk_li = crs.li[position] * self.sk;
+		let sk_li = crs_li * self.sk;
 
-		let sk_li_minus0 = crs.li_minus0[position] * self.sk;
+		let sk_li_minus0 = crs_li_minus0 * self.sk;
 
-		let sk_li_x = crs.li_x[position] * self.sk;
+		let sk_li_x = crs_li_x * self.sk;
 
 		for j in 0..crs.n {
-			sk_li_lj_z.push(crs.li_lj_z[position][j] * self.sk);
+			let crs_li_lj_z_j = crs_li_lj_z.get(j)?;
+			sk_li_lj_z.push(crs_li_lj_z_j * self.sk);
 		}
 
-		LagPublicKey {
+		Some(LagPublicKey {
 			id: self.id,
 			position,
 			bls_pk: E::G1::generator() * self.sk,
@@ -203,7 +197,7 @@ impl<E: Pairing> SecretKey<E> {
 			sk_li_minus0,
 			sk_li_lj_z,
 			sk_li_x,
-		}
+		})
 	}
 
 	pub fn partial_decryption(&self, ct: &Ciphertext<E>) -> PartialDecryption<E> {
@@ -221,10 +215,11 @@ impl<E: Pairing> PublicKey<E> {
 		crs: &CRS<E>,
 		lag_polys: &LagPolys<E::ScalarField>,
 	) -> Result<LagPublicKey<E>, Error> {
+		// need to handle if lag_polys.l[position] exists
+		// need to handle if lag_polys.l_minus[position] exists
+		// need to handle if lag_polys.l_x[position] exists
 		// assert!(position < crs.n, "position out of bounds");
-
-		let bls_pk = self.bls_pk;
-
+		// we also need to be sure that self.hints[lag_polys[position].degree() + 1] exists
 		let sk_li =
 			E::G1::msm(&self.hints[0..lag_polys.l[position].degree() + 1], &lag_polys.l[position])
 				.map_err(|min_len| Error::MSMError(min_len))?;
@@ -257,22 +252,15 @@ impl<E: Pairing> PublicKey<E> {
 			*s *= domain.element(j) * lag_polys.denom;
 		}
 
-		// // compute sk_li_lj_z
-		// let mut sk_li_lj_z = vec![E::G1::zero(); crs.n];
-
-		// let timer = start_timer!(|| "msm version");
-		// for j in 0..crs.n {
-		//     sk_li_lj_z[j] = E::G1::msm(
-		//         &self.hints[0..lag_polys.li_lj_z[id][j].degree() + 1],
-		//         &lag_polys.li_lj_z[id][j],
-		//     )
-		//     .unwrap();
-		// }
-		// end_timer!(timer);
-
-		// assert_eq!(sk_li_lj_z, my_sk_li_lj_z);
-
-		Ok(LagPublicKey { id: self.id, position, bls_pk, sk_li, sk_li_minus0, sk_li_lj_z, sk_li_x })
+		Ok(LagPublicKey {
+			id: self.id,
+			position,
+			bls_pk: self.bls_pk,
+			sk_li,
+			sk_li_minus0,
+			sk_li_lj_z,
+			sk_li_x,
+		})
 	}
 }
 
@@ -280,6 +268,8 @@ impl<E: Pairing> PublicKey<E> {
 mod tests {
 	use super::*;
 	use crate::aggregate::AggregateKey;
+	use proptest::prelude::*;
+
 	type E = ark_bls12_381::Bls12_381;
 	type F = ark_bls12_381::Fr;
 
@@ -295,8 +285,8 @@ mod tests {
 
 		for i in 0..n {
 			sk.push(SecretKey::<E>::new(&mut rng, i));
-			pk.push(sk[i].get_lagrange_pk(i, &crs));
-			lagrange_pk.push(sk[i].get_lagrange_pk(i, &crs));
+			pk.push(sk[i].get_lagrange_pk(i, &crs).unwrap());
+			lagrange_pk.push(sk[i].get_lagrange_pk(i, &crs).unwrap());
 
 			assert_eq!(pk[i].sk_li, lagrange_pk[i].sk_li);
 			assert_eq!(pk[i].sk_li_minus0, lagrange_pk[i].sk_li_minus0);
@@ -319,8 +309,8 @@ mod tests {
 
 		for i in 0..n {
 			sk.push(SecretKey::<E>::new(&mut rng, i));
-			pk.push(sk[i].get_lagrange_pk(i, &crs));
-			lagrange_pk.push(sk[i].get_lagrange_pk(i, &crs));
+			pk.push(sk[i].get_lagrange_pk(i, &crs).unwrap());
+			lagrange_pk.push(sk[i].get_lagrange_pk(i, &crs).unwrap());
 
 			assert_eq!(pk[i].sk_li, lagrange_pk[i].sk_li);
 			assert_eq!(pk[i].sk_li_minus0, lagrange_pk[i].sk_li_minus0);
@@ -340,7 +330,7 @@ mod tests {
 
 		let sk = SecretKey::<E>::new(&mut rng, 0);
 		let pk = sk.get_pk(&crs);
-		let lag_pk = sk.get_lagrange_pk(0, &crs);
+		let lag_pk = sk.get_lagrange_pk(0, &crs).unwrap();
 
 		let computed_lag_pk = pk.get_lag_public_key(0, &crs, &lagpolys).unwrap();
 
@@ -360,7 +350,7 @@ mod tests {
 
 		let sk = SecretKey::<E>::new(&mut rng, 0);
 		let pk = sk.get_pk(&crs);
-		let lag_pk = sk.get_lagrange_pk(0, &crs);
+		let lag_pk = sk.get_lagrange_pk(0, &crs).unwrap();
 
 		let computed_lag_pk = pk.get_lag_public_key(0, &crs, &lagpolys).unwrap();
 
@@ -370,4 +360,74 @@ mod tests {
 		assert_eq!(computed_lag_pk.sk_li_x, lag_pk.sk_li_x);
 		assert_eq!(computed_lag_pk.sk_li_lj_z, lag_pk.sk_li_lj_z);
 	}
+
+	// TODO: we actually need to start at SecretKey
+	proptest! {
+		#[test]
+		fn proptest_secretkey_get_pk(id in 0usize..6usize, n in 1usize..6usize) {
+			let mut rng = ark_std::test_rng();
+			let crs = CRS::<E>::new(n, &mut rng).unwrap();
+
+			let sk = SecretKey::<E>::new(&mut rng, id);
+			let pk = sk.get_pk(&crs);
+
+			assert_eq!(pk.id, sk.id);
+			assert_eq!(pk.bls_pk, <E as Pairing>::G1::generator() * sk.sk);
+
+			for (i, hint) in pk.hints.iter().enumerate().take(crs.powers_of_g.len()) {
+				assert_eq!(*hint, (crs.powers_of_g[i] * sk.sk));
+			}
+
+			for i in 0..crs.y.len() {
+				assert_eq!(pk.y[i], (crs.y[i] * sk.sk));
+			}
+		}
+	}
+	proptest! {
+		#[test]
+		fn proptest_secretkey_get_lagrange_pk(position in 0usize..6usize, n in 1usize..6usize) {
+			let mut rng = ark_std::test_rng();
+			let crs = CRS::<E>::new(n, &mut rng).unwrap();
+
+			let sk = SecretKey::<E>::new(&mut rng, 0);
+			match sk.get_lagrange_pk(position, &crs) {
+				Some (lpk) => {
+					assert_eq!(lpk.id, sk.id);
+					assert_eq!(lpk.position, position);
+					assert_eq!(lpk.bls_pk, <E as Pairing>::G1::generator() * sk.sk);
+					assert_eq!(lpk.sk_li, crs.li[position] * sk.sk);
+					assert_eq!(lpk.sk_li_minus0, crs.li_minus0[position] * sk.sk);
+				},
+				None => {
+					assert!(
+						crs.li.get(position).is_none()
+						|| crs.li_minus0.get(position).is_none()
+						|| crs.li_x.get(position).is_none()
+						|| position >= crs.n
+					);
+				}
+			}
+		}
+	}
+
+	// proptest! {
+	// 	#[test]
+	// 	fn proptest_get_lag_public_key(
+	// 		position in 0usize..6usize,
+	// 		m in 1usize..6usize,
+	// 		n in 1usize..6usize,
+	// 	) {
+	// 		let mut rng = ark_std::test_rng();
+	// 		let crs = CRS::<E>::new(m, &mut rng).unwrap();
+	// 		let lagpolys = LagPolys::<F>::new(n).unwrap();
+
+	// 		let sk = SecretKey::<E>::new(&mut rng, 0);
+	// 		let pk = sk.get_pk(&crs);
+	// 		let lag_pk = sk.get_lagrange_pk(0, &crs);
+
+	// 		let computed_lag_pk = pk.get_lag_public_key(0, &crs, &lagpolys).unwrap();
+
+	// 	}
+
+	// }
 }

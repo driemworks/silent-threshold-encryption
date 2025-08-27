@@ -117,7 +117,7 @@ mod tests {
 
 		for i in 0..n {
 			sk.push(SecretKey::<E>::new(&mut rng, i));
-			pk.push(sk[i].get_lagrange_pk(i, &crs))
+			pk.push(sk[i].get_lagrange_pk(i, &crs).unwrap())
 		}
 
 		let (_ak, ek) = AggregateKey::<E>::new(pk, &crs).unwrap();
@@ -157,7 +157,7 @@ mod tests {
 
 		for i in 0..n {
 			sk.push(SecretKey::<E>::new(&mut rng, i));
-			pk.push(sk[i].get_lagrange_pk(i, &crs))
+			pk.push(sk[i].get_lagrange_pk(i, &crs).unwrap())
 		}
 
 		let (_ak, ek) = AggregateKey::<E>::new(pk, &crs).unwrap();
@@ -225,7 +225,7 @@ mod tests {
 
 		for i in 0..n {
 			sk.push(SecretKey::<E>::new(&mut rng, i));
-			pk.push(sk[i].get_lagrange_pk(i, &crs))
+			pk.push(sk[i].get_lagrange_pk(i, &crs).unwrap())
 		}
 
 		let (_ak, ek) = AggregateKey::<E>::new(pk, &crs).unwrap();
@@ -248,7 +248,7 @@ mod tests {
 
 		for i in 0..3 {
 			sk.push(SecretKey::<E>::new(&mut rng, i));
-			pk.push(sk[i].get_lagrange_pk(i, &crs))
+			pk.push(sk[i].get_lagrange_pk(i, &crs).unwrap())
 		}
 
 		let (_ak, ek) = AggregateKey::<E>::new(pk, &crs).unwrap();
@@ -276,7 +276,7 @@ mod tests {
 
 			for i in 0..n {
 				sk.push(SecretKey::<E>::new(&mut rng, i));
-				pk.push(sk[i].get_lagrange_pk(i, &crs))
+				pk.push(sk[i].get_lagrange_pk(i, &crs).unwrap())
 			}
 
 			let (_ak, ek) = AggregateKey::<E>::new(pk, &crs).unwrap();
@@ -316,7 +316,7 @@ mod tests {
 
 			for i in 0..key_count {
 				sk.push(SecretKey::<E>::new(&mut rng, i));
-				pk.push(sk[i].get_lagrange_pk(i, &crs))
+				pk.push(sk[i].get_lagrange_pk(i, &crs).unwrap())
 			}
 
 			let (_ak, ek) = AggregateKey::<E>::new(pk, &crs).unwrap();

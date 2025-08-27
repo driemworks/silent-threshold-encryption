@@ -171,7 +171,7 @@ mod tests {
 		let pk = sk
 			.iter()
 			.enumerate()
-			.map(|(i, sk)| sk.get_lagrange_pk(i, &crs))
+			.map(|(i, sk)| sk.get_lagrange_pk(i, &crs).unwrap())
 			.collect::<Vec<_>>();
 
 		let (ak, ek) = AggregateKey::<E>::new(pk, &crs).unwrap();

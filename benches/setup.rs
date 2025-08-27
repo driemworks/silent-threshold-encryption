@@ -15,7 +15,7 @@ fn bench_setup(c: &mut Criterion) {
 		let sk = SecretKey::<E>::new(&mut rng, 0);
 
 		group.bench_with_input(BenchmarkId::from_parameter(n), &crs, |b, inp| {
-			b.iter(|| sk.get_lagrange_pk(0, &inp));
+			b.iter(|| sk.get_lagrange_pk(0, &inp).unwrap());
 		});
 	}
 
