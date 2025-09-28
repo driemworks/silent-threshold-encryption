@@ -6,7 +6,7 @@ use crate::{
 };
 use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_std::{end_timer, start_timer, Zero};
+use ark_std::{end_timer, rand::prelude::SliceRandom, start_timer, Zero};
 use hopcroft_karp::matching;
 use rand::{Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
@@ -83,31 +83,36 @@ pub struct SystemPublicKeys<E: Pairing> {
 }
 
 impl<E: Pairing> SystemPublicKeys<E> {
+	/// Construct SystemPublicKeys by sampling up to
 	pub fn new(
 		pks: Vec<PublicKey<E>>,
 		crs: &CRS<E>,
 		lag_polys: &LagPolys<E::ScalarField>,
 		k: usize,
 	) -> Result<Self, Error> {
-		// TODO: if k > crs.n => infinite loop
+		if k > crs.n {
+			return Err(Error::InvalidParameter(format!(
+				"Cannot sample {} unique values from a range 0..{}",
+				k, crs.n
+			)));
+		}
+
 		// using a deterministic seed for reproducibility across machines
 		// can derandomize using a random oracle
-		let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+		// let mut rng = rand::rngs::os::seed_from_u64(42);
+		let mut rng = ark_std::rand::rngs::OsRng;
 
 		let m = pks.len();
 		let nodes = (0..m).collect::<Vec<_>>();
 		let mut positions = vec![];
 
 		for _ in 0..m {
+			// TODO:: with_capacity
 			let mut row = vec![];
-			let mut sampled = vec![];
-			while sampled.len() < k {
-				let value = rng.random_range(0..crs.n);
-				// ensure that the sampled value is unique
-				if !sampled.contains(&value) {
-					sampled.push(value);
-				}
-			}
+			// Generate all possible values and shuffle
+			let mut available: Vec<usize> = (0..crs.n).collect();
+			available.shuffle(&mut rng);
+			let sampled = available.into_iter().take(k).collect::<Vec<_>>();
 			row.extend(sampled);
 			positions.push(row);
 		}
@@ -127,7 +132,8 @@ impl<E: Pairing> SystemPublicKeys<E> {
 		lag_pks.par_iter_mut().enumerate().for_each(|(i, lag_pk_i)| {
 			let mut lag_pk_inner = vec![];
 			for j in 0..k {
-				// when does positions[i][j] not exist?
+				// does positions[i][j] ever not exist?
+				// when does this function fail?
 				lag_pk_inner
 					.push(pks[i].get_lag_public_key(positions[i][j], crs, lag_polys).unwrap());
 			}
@@ -215,6 +221,7 @@ mod tests {
 	use super::*;
 	use crate::setup::SecretKey;
 	use ark_ec::PrimeGroup;
+	use ark_std::UniformRand;
 	use hopcroft_karp::matching;
 	use proptest::prelude::*;
 
@@ -311,14 +318,14 @@ mod tests {
 			.unzip();
 		end_timer!(timer);
 
-		let system_keys = SystemPublicKeys::<E>::new(pk.clone(), &crs, &lag_polys, 3);
+		let _system_keys = SystemPublicKeys::<E>::new(pk.clone(), &crs, &lag_polys, 3);
 		// assert!(system_keys.is_ok());
 	}
 
 	#[test]
 	fn setup_system_public_keys_k_gt_n_fails() {
-		let n = 1 << 7;
-		let m = 1 << 10;
+		let n = 1 << 3;
+		let m = 1 << 5;
 		let crs = CRS::<E>::new(n, &mut ark_std::test_rng()).unwrap();
 		let lag_polys = LagPolys::<F>::new(n).unwrap();
 		use rayon::prelude::*;
@@ -334,50 +341,81 @@ mod tests {
 			.unzip();
 		end_timer!(timer);
 
-		let system_keys = SystemPublicKeys::<E>::new(pk.clone(), &crs, &lag_polys, n);
-		// assert!(system_keys.is_err());
+		let system_keys = SystemPublicKeys::<E>::new(pk.clone(), &crs, &lag_polys, n + 1);
+		assert!(system_keys.is_err());
 	}
 
-	// proptest! {
-	// 	#[test]
-	// 	fn prop_system_public_keys_construction_invariants(
-	// 		m in 1usize..20,      // number of parties
-	// 		k in 1usize..10,      // positions to sample
-	// 		crs_n in 5usize..30   // CRS size
-	// 	) {
-	// 		prop_assume!(k <= crs_n); // k must be <= CRS size for sampling to work
+	#[test]
+	fn setup_system_public_keys_k_eq_m() {
+		let n = 9;
+		let m = 1;
+		let crs = CRS::<E>::new(n, &mut ark_std::test_rng()).unwrap();
+		let lag_polys = LagPolys::<F>::new(n).unwrap();
+		use rayon::prelude::*;
 
-	// 		let mut rng = ark_std::test_rng();
-	// 		let crs = CRS::new(crs_n, &mut rng).unwrap();
-	// 		let lag_polys = LagPolys::<E::ScalarField>::new(crs_n);
+		let timer = start_timer!(|| "Setup Public Keys");
+		let (_sk, pk): (Vec<_>, Vec<_>) = (0..m)
+			.into_par_iter()
+			.map(|i| {
+				let sk = SecretKey::<E>::new(&mut ark_std::test_rng(), i);
+				let pk = sk.get_pk(&crs);
+				(sk, pk)
+			})
+			.unzip();
+		end_timer!(timer);
 
-	// 		// Generate m public keys
-	// 		let mut pks = Vec::new();
-	// 		for _ in 0..m {
-	// 			let sk = E::ScalarField::rand(&mut rng);
-	// 			let pk = PublicKey::new(sk, &crs).unwrap();
-	// 			pks.push(pk);
-	// 		}
+		let system_keys = SystemPublicKeys::<E>::new(pk.clone(), &crs, &lag_polys, 1);
+		assert!(system_keys.is_ok());
+	}
 
-	// 		let system_pks = SystemPublicKeys::new(pks.clone(), &crs, &lag_polys, k);
+	proptest! {
+		#[test]
+		fn prop_system_public_keys_construction_invariants(
+			m in 1usize..20,      // number of parties (pks.len)
+			k in 1usize..10,      // positions to sample
+			crs_n in 5usize..30   // CRS size (crs.n)
+		) {
+			let crs = CRS::<E>::new(crs_n, &mut ark_std::test_rng()).unwrap();
+			let lag_polys = LagPolys::<F>::new(crs_n).unwrap();
+			use rayon::prelude::*;
 
-	// 		// Basic invariants
-	// 		prop_assert_eq!(system_pks.m, m);
-	// 		prop_assert_eq!(system_pks.k, k);
-	// 		prop_assert_eq!(system_pks.pks.len(), m);
-	// 		prop_assert_eq!(system_pks.lag_pks.len(), m);
+			let timer = start_timer!(|| "Setup Public Keys");
+			let (_sk, pks): (Vec<_>, Vec<_>) = (0..m)
+				.into_par_iter()
+				.map(|i| {
+					let sk = SecretKey::<E>::new(&mut ark_std::test_rng(), i);
+					let pk = sk.get_pk(&crs);
+					(sk, pk)
+				})
+				.unzip();
+			end_timer!(timer);
 
-	// 		// Each party should have exactly k lagrange public keys
-	// 		for lag_pk_row in &system_pks.lag_pks {
-	// 			prop_assert_eq!(lag_pk_row.len(), k);
-	// 		}
+			let result = SystemPublicKeys::new(pks.clone(), &crs, &lag_polys, k);
 
-	// 		// Original public keys should be preserved
-	// 		for (original, stored) in pks.iter().zip(system_pks.pks.iter()) {
-	// 			prop_assert_eq!(original.pk, stored.pk);
-	// 		}
-	// 	}
-	// }
+			if k > crs.n {
+				// if k exceeds crs.n, we get an error
+				prop_assert!(matches!(result, Err(Error::InvalidParameter(_))));
+			} else {
+				assert!(result.is_ok());
+				let system_pks = result.unwrap();
+				// Basic invariants
+				prop_assert_eq!(system_pks.m, m);
+				prop_assert_eq!(system_pks.k, k);
+				prop_assert_eq!(system_pks.pks.len(), m);
+				prop_assert_eq!(system_pks.lag_pks.len(), m);
+
+				// Each party should have exactly k lagrange public keys
+				for lag_pk_row in &system_pks.lag_pks {
+					prop_assert_eq!(lag_pk_row.len(), k);
+				}
+
+				// Original public keys should be preserved
+				for (original, stored) in pks.iter().zip(system_pks.pks.iter()) {
+					prop_assert_eq!(original, stored);
+				}
+			}
+		}
+	}
 
 	#[test]
 	fn test_kuhn_munkres() {

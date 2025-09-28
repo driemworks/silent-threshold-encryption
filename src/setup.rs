@@ -100,7 +100,7 @@ impl<E: Pairing> PartialDecryption<E> {
 }
 
 /// Position oblivious public key -- slower to aggregate
-#[derive(CanonicalSerialize, CanonicalDeserialize, Serialize, Deserialize, Clone)]
+#[derive(CanonicalSerialize, CanonicalDeserialize, Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct PublicKey<E: Pairing> {
 	#[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
 	pub bls_pk: E::G1, //BLS pk

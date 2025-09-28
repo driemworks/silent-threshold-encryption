@@ -25,6 +25,9 @@ pub enum Error {
 	/// The size specified exceeds u64::MAX
 	#[error("The size specified exceeds u64::MAX")]
 	InvalidDomainSize,
+	/// A parameter is invali
+	#[error("{0}")]
+	InvalidParameter(String),
 	/// The value used for tau was either 0 or misformatted
 	#[error("The value used for tau was either 0 or misformatted")]
 	InvalidTau,
