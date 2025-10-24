@@ -136,13 +136,6 @@ pub fn agg_dec<E: Pairing>(
 	// encrypt the message m using the derived key
 	let aes_key: &Key<Aes256Gcm> = &aes_key.into();
 	let cipher = Aes256Gcm::new(aes_key);
-
-	println!("🔓 DECRYPT enc_key: {:?}", enc_key);
-
-	// And after deriving AES key:
-	println!("🔓 DECRYPT aes_key (first 16 bytes): {:?}", &aes_key[..16]);
-	println!("🔓 DECRYPT aes_nonce: {:?}", aes_nonce);
-
 	cipher
 		.decrypt(&aes_nonce.into(), ct.ct.as_ref())
 		.map_err(|_| Error::AesDecryptError)
