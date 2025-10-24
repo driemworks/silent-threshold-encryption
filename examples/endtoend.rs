@@ -39,7 +39,7 @@ fn main() {
 	let (ak, ek) = system_keys.get_aggregate_key(&subset, &crs, &lag_polys);
 	end_timer!(subset_timer);
 
-	let msg = b"Hello, world!";
+	let msfg = b"Hello, world!";
 
 	let enc_timer = start_timer!(|| "Encrypting a message");
 	let gamma_g2 = G2::rand(&mut rng);
@@ -73,7 +73,7 @@ fn main() {
 	// let mut selector: Vec<bool> = Vec::new();
 	// for _ in 0..t {
 	//     selector.push(true);
-	// }
+	// }`
 	// for _ in t..n {
 	//     selector.push(false);
 	// }

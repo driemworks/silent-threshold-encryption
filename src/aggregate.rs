@@ -6,9 +6,9 @@ use crate::{
 };
 use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_std::{end_timer, rand::prelude::SliceRandom, start_timer, Zero};
+use ark_std::{end_timer, rand::{prelude::SliceRandom, SeedableRng}, start_timer, Zero};
 use hopcroft_karp::matching;
-use rand::{Rng, SeedableRng};
+// use rand::{Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
 
 #[derive(CanonicalSerialize, CanonicalDeserialize, Serialize, Deserialize, Clone)]
@@ -100,7 +100,7 @@ impl<E: Pairing> SystemPublicKeys<E> {
 		// using a deterministic seed for reproducibility across machines
 		// can derandomize using a random oracle
 		// let mut rng = rand::rngs::os::seed_from_u64(42);
-		let mut rng = ark_std::rand::rngs::OsRng;
+		let mut rng = ark_std::rand::rngs::StdRng::seed_from_u64(42);
 
 		let m = pks.len();
 		let nodes = (0..m).collect::<Vec<_>>();

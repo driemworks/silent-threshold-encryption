@@ -79,6 +79,12 @@ pub fn encrypt<E: Pairing>(
 	let ct_res = cipher.encrypt(&aes_nonce.into(), m).map_err(|_| Error::EncryptionError);
 	success &= Choice::from(ct_res.is_ok() as u8);
 
+	println!("🔐 ENCRYPT enc_key: {:?}", enc_key);
+
+	// And after deriving AES key:
+	println!("🔐 ENCRYPT aes_key (first 16 bytes): {:?}", &aes_key[..16]);
+	println!("🔐 ENCRYPT aes_nonce: {:?}", aes_nonce);
+
 	if success.into() {
 		let aes_ct = ct_res.unwrap_or_else(|_| Vec::new());
 		let ct = Ciphertext { gamma_g2, sa1, sa2, ct: aes_ct, t };
