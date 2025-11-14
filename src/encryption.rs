@@ -127,7 +127,7 @@ mod tests {
 
 		let mut ct_bytes = Vec::new();
 		ct.serialize_compressed(&mut ct_bytes).unwrap();
-		println!("Compressed ciphertext: {} bytes", ct_bytes.len());
+		// println!("Compressed ciphertext: {} bytes", ct_bytes.len());
 
 		let mut g1_bytes = Vec::new();
 		let mut g2_bytes = Vec::new();
@@ -140,9 +140,9 @@ mod tests {
 		h.serialize_compressed(&mut g2_bytes).unwrap();
 		ek.e_gh.serialize_compressed(&mut e_gh_bytes).unwrap();
 
-		println!("G1 len: {} bytes", g1_bytes.len());
-		println!("G2 len: {} bytes", g2_bytes.len());
-		println!("GT len: {} bytes", e_gh_bytes.len());
+		// println!("G1 len: {} bytes", g1_bytes.len());
+		// println!("G2 len: {} bytes", g2_bytes.len());
+		// println!("GT len: {} bytes", e_gh_bytes.len());
 	}
 
 	#[test]

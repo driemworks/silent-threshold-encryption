@@ -160,7 +160,7 @@ impl<E: Pairing> SystemPublicKeys<E> {
 
 		let mut res = matching(&edges);
 
-		println!("Initial Matching Size: {}/{}", res.len(), crs.n);
+		// println!("Initial Matching Size: {}/{}", res.len(), crs.n);
 
 		// deterministically assign the remaining edges
 		let mut assigned_nodes = vec![];
@@ -193,7 +193,7 @@ impl<E: Pairing> SystemPublicKeys<E> {
 			*position -= self.m;
 		});
 
-		println!("Matching Size: {}/{}", res.len(), crs.n);
+		// println!("Matching Size: {}/{}", res.len(), crs.n);
 		// create a new vector of lag public keys
 		let mut set_lag_pks = vec![];
 		for r in &res {
@@ -451,7 +451,7 @@ mod tests {
 
 			let mut res = matching(&edges);
 
-			println!("Initial Matching Size: {}/{}", res.len(), N);
+			// println!("Initial Matching Size: {}/{}", res.len(), N);
 
 			let mut assigned_nodes = vec![];
 			let mut assigned_positions = vec![];
@@ -476,8 +476,8 @@ mod tests {
 				}
 			}
 
-			println!("Matching Size: {}/{}", res.len(), N);
-			println!("Matching: {:?}", res);
+			// println!("Matching Size: {}/{}", res.len(), N);
+			// println!("Matching: {:?}", res);
 		}
 	}
 }
